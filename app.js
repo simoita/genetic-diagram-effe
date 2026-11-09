@@ -2012,8 +2012,11 @@ function drawSVGConnections(){
 
     const parts=partsByBox.get(cn.srcBoxId)||[];
     const outPart=parts.length ? parts[(cn.srcSpaceIndex||0)%parts.length] : null;
-    // il colore della strada dipende ESCLUSIVAMENTE dalla priorita della parte da cui parte (a sinistra)
-    const cp = outPart ? (outPart.failed ? 'failed' : (outPart.priority||'p1')) : 'p1';
+    // Il colore segue la parte da cui parte la strada (a sinistra). Per una
+    // radice senza parte a monte vale la priorita della modifica stessa.
+    const cp = outPart
+      ? (outPart.failed ? 'failed' : (outPart.priority||'p1'))
+      : ((info.box && info.box.priority) || 'p1');
     if(cp==='failed') return;
     const outRect=outPart ? rectOf('dot-out-'+outPart.id) : null;
     let x1,y1;
@@ -2048,8 +2051,10 @@ function drawSVGConnections(){
     const pcolor=s.cp==='p2'?'#3b82f6':s.cp==='p3'?'#a855f7':s.cp==='p4'?'#eab308':s.cp==='failed'?'#ef4444':'#22c55e';
     const popacity=s.cp==='p1'?1:s.cp==='p2'?0.8:s.cp==='p3'?0.6:s.cp==='p4'?0.4:s.cp==='failed'?0.5:1;
     p.setAttribute('class','connection-line'+(activeSet?(activeSet.has(s.id)?' highlighted':' dimmed'):''));
-    p.setAttribute('stroke',pcolor);
-    p.setAttribute('stroke-opacity',popacity);
+    // Stile inline: il CSS .connection-line ha uno stroke di fallback che
+    // altrimenti sovrascriverebbe l'attributo e renderebbe tutte le strade verdi.
+    p.style.stroke = pcolor;
+    p.style.opacity = String(popacity);
     p.setAttribute('data-conn-id',s.id);
     frag.appendChild(p);
   });
