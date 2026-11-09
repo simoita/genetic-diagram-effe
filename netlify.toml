@@ -1,0 +1,9 @@
+[build]
+  command = ""
+  publish = "."
+  functionDirectory = ""
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
