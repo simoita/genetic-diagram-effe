@@ -1,0 +1,21 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "freellmapi": {
+      "npm": "@ai-sdk/openai",
+      "options": {
+        "baseURL": "http://localhost:31415/v1",
+        "apiKey": "oc_sk_10437414e4a6_5A8_9VJcNhZiJs938UcD2NUSE7GEMhJo"
+      },
+      "models": {
+        "claude-sonnet-4.5": {},
+        "claude-opus-4.5": {},
+        "claude-haiku-4.5": {},
+        "gemini-3-pro": {},
+        "gpt-5": {},
+        "kimi-k2": {}
+      }
+    }
+  },
+  "model": "freellmapi/claude-sonnet-4.5"
+}

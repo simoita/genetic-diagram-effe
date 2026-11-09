@@ -2354,7 +2354,7 @@ function resetZoom(){
 
 function startPan(e){
   if(e.button !== 0) return;
-  if(e.target.closest('.box-card') || e.target.closest('.space-card') || e.target.closest('.modal-overlay') || e.target.closest('button') || e.target.closest('input')) return;
+  if(e.target.closest('.box-card') || e.target.closest('.space-card') || e.target.closest('.modal-overlay') || e.target.closest('button') || e.target.closest('input') || e.target.closest('.box-title-row') || e.target.closest('.level-title')) return;
   isPanning = true;
   startX = e.clientX;
   startY = e.clientY;

@@ -86,7 +86,8 @@ body {
 img, svg, video, canvas { display: block; max-width: 100%; height: auto; }
 [hidden] { display: none !important; }
 a { color: inherit; text-decoration: none; }
-button { font: inherit; color: inherit; background: none; border: none; padding: 0; margin: 0; cursor: pointer; }
+button { font: inherit; color: inherit; background: none; border: none; padding: 0; margin: 0; cursor: pointer;
+  user-select: none; }
 h1, h2, h3, h4, p, ul, ol, figure, blockquote { margin: 0; }
 ul, ol { padding: 0; list-style: none; }
 h1, h2, h3, h4 {
@@ -148,6 +149,7 @@ h1, h2, h3, h4 {
   letter-spacing: 0;
   white-space: nowrap;
   cursor: pointer;
+  user-select: none;
   user-select: none;
   transition: background-color var(--dur) var(--ease), color var(--dur) var(--ease), border-color var(--dur) var(--ease), transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
   background: linear-gradient(180deg, #16233a, #111c2f);
@@ -268,6 +270,7 @@ select.input {
   appearance: none;
   -webkit-appearance: none;
   cursor: pointer;
+  user-select: none;
   padding-right: 2rem;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238fa3c4' stroke-width='2.5' stroke-linecap='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
@@ -336,10 +339,11 @@ select.input option { background: #0b1424; color: var(--ink); }
   font-size: .82rem;
   color: #fff;
   cursor: pointer;
+  user-select: none;
   flex: 1;
   min-width: 0;
 }
-.box-title { white-space: normal; word-break: break-word; line-height: 1.35; }
+.box-title { white-space: normal; word-break: break-word; line-height: 1.35; user-select: none; }
 .box-desc {
   font-size: .74rem;
   color: #b9c8df;
@@ -427,6 +431,7 @@ select.input option { background: #0b1424; color: var(--ink); }
   color: #60a5fa;
   text-transform: uppercase;
   cursor: pointer;
+  user-select: none;
   display: flex;
   align-items: center;
   gap: .3rem;
@@ -485,6 +490,7 @@ select.input option { background: #0b1424; color: var(--ink); }
   box-shadow: 0 2px 8px -3px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.045);
   width: 100%;
   cursor: pointer;
+  user-select: none;
   transition: background .15s, border-color .15s, box-shadow .15s, transform .15s;
 }
 .space-card:hover {
@@ -548,6 +554,7 @@ select.input option { background: #0b1424; color: var(--ink); }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  user-select: none;
 }
 .space-source {
   display: flex;
@@ -556,6 +563,7 @@ select.input option { background: #0b1424; color: var(--ink); }
   font-size: .64rem;
   color: #94a3b8;
   margin: .2rem 0;
+  user-select: none;
 }
 .space-source b { color: #cbd7ec; }
 .space-score {
@@ -576,6 +584,7 @@ select.input option { background: #0b1424; color: var(--ink); }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  user-select: none;
 }
 .space-table {
   margin-top: .45rem;
@@ -604,6 +613,7 @@ select.input option { background: #0b1424; color: var(--ink); }
   max-width: 55%;
   overflow: hidden;
   text-overflow: ellipsis;
+  user-select: none;
   white-space: nowrap;
 }
 .space-table-value {
@@ -612,6 +622,7 @@ select.input option { background: #0b1424; color: var(--ink); }
   max-width: 45%;
   overflow: hidden;
   text-overflow: ellipsis;
+  user-select: none;
   white-space: nowrap;
   word-break: normal;
 }
@@ -626,6 +637,7 @@ select.input option { background: #0b1424; color: var(--ink); }
   border-radius: .2rem;
   outline: none;
   text-overflow: ellipsis;
+  user-select: none;
   word-break: break-all;
 }
 .space-table-value-input:focus {
@@ -645,6 +657,7 @@ select.input option { background: #0b1424; color: var(--ink); }
   font-size: .6rem;
   font-weight: 650;
   cursor: pointer;
+  user-select: none;
   transition: .15s;
   line-height: 1.2;
   text-align: left;
@@ -709,6 +722,7 @@ select.input option { background: #0b1424; color: var(--ink); }
   line-height: 1;
   cursor: pointer;
   user-select: none;
+  user-select: none;
   background: rgba(0,0,0,.2);
   color: #fff;
 }
@@ -740,6 +754,7 @@ select.input option { background: #0b1424; color: var(--ink); }
   background: transparent;
   color: #cbd5e1;
   cursor: pointer;
+  user-select: none;
   text-align: left;
   width: 100%;
 }
@@ -773,6 +788,7 @@ select.input option { background: #0b1424; color: var(--ink); }
   line-height: 1;
   cursor: pointer;
   user-select: none;
+  user-select: none;
   background: rgba(0,0,0,.2);
   color: #fff;
 }
@@ -799,6 +815,7 @@ select.input option { background: #0b1424; color: var(--ink); }
   background: transparent;
   color: #cbd5e1;
   cursor: pointer;
+  user-select: none;
   text-align: left;
   width: 100%;
 }
@@ -882,6 +899,7 @@ select.input option { background: #0b1424; color: var(--ink); }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  user-select: none;
 }
 .toolbar-sub {
   font-size: .62rem;
@@ -890,6 +908,7 @@ select.input option { background: #0b1424; color: var(--ink); }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  user-select: none;
 }
 .toolbar-center { flex: 1 1 220px; min-width: 180px; max-width: 420px; display: flex; justify-content: center; }
 .toolbar-right { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
@@ -934,6 +953,7 @@ select.input option { background: #0b1424; color: var(--ink); }
   border: none;
   color: #7f92b3;
   cursor: pointer;
+  user-select: none;
   font-size: .68rem;
   padding: .2rem .3rem;
   border-radius: .35rem;
@@ -1019,6 +1039,7 @@ select.input option { background: #0b1424; color: var(--ink); }
   font-size: .65rem;
   color: #e2e8f0;
   cursor: pointer;
+  user-select: none;
   transition: all .2s;
 }
 .presence-indicator:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,.3); border-color: rgba(100,116,139,.4); }
@@ -1204,6 +1225,7 @@ select.input option { background: #0b1424; color: var(--ink); }
   border-radius: .45rem;
   border: 2px solid rgba(255,255,255,.18);
   cursor: pointer;
+  user-select: none;
   transition: all .25s;
   background: linear-gradient(135deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
   box-shadow: none;
@@ -1238,7 +1260,8 @@ select.input option { background: #0b1424; color: var(--ink); }
   flex: none;
 }
 .conn-indicator.active { background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,.2); }
-.conn-title { font-size: .72rem; color: #e2ebfb; flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.conn-title { font-size: .72rem; color: #e2ebfb; flex: 1; overflow: hidden; text-overflow: ellipsis;
+  user-select: none; }
 .conn-source-main { display: flex; flex-direction: column; gap: .1rem; min-width: 0; flex: 1; }
 .conn-meta { font-size: .58rem; color: #8093b3; font-weight: 600; letter-spacing: .02em; }
 .conn-toggle {
@@ -1347,6 +1370,7 @@ select.input option { background: #0b1424; color: var(--ink); }
   font-size: .85rem;
   line-height: 1;
   cursor: pointer;
+  user-select: none;
   transition: background .15s, color .15s, border-color .15s;
 }
 .modal-close:hover {
@@ -1437,6 +1461,7 @@ select.input option { background: #0b1424; color: var(--ink); }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  user-select: none;
 }
 .reorder-prio {
   flex: none;
@@ -1534,6 +1559,7 @@ select.input option { background: #0b1424; color: var(--ink); }
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
+  user-select: none;
   white-space: nowrap;
 }
 .table-inputs { display: grid; gap: .6rem; }
@@ -1557,6 +1583,7 @@ select.input option { background: #0b1424; color: var(--ink); }
   color: #dbe5f7;
   cursor: pointer;
   user-select: none;
+  user-select: none;
   padding: .15rem 0;
 }
 .checkbox-row input {
@@ -1564,6 +1591,7 @@ select.input option { background: #0b1424; color: var(--ink); }
   width: 14px;
   height: 14px;
   cursor: pointer;
+  user-select: none;
   flex: none;
 }
 .fail-row {
@@ -1573,6 +1601,7 @@ select.input option { background: #0b1424; color: var(--ink); }
   font-size: .62rem;
   color: #94a3b8;
   cursor: pointer;
+  user-select: none;
   margin-left: .4rem;
 }
 .fail-row input {
@@ -1631,8 +1660,10 @@ select.input option { background: #0b1424; color: var(--ink); }
 .gap-2 { gap: .5rem; }
 .w-full { width: 100%; }
 .relative { position: relative; }
-.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cursor-pointer { cursor: pointer; }
+.truncate { overflow: hidden; text-overflow: ellipsis;
+  user-select: none; white-space: nowrap; }
+.cursor-pointer { cursor: pointer;
+  user-select: none; }
 .rounded-xl { border-radius: .7rem; }
 .p-2 { padding: .5rem; }
 .shadow-sm { box-shadow: 0 1px 2px rgba(0,0,0,.35); }
