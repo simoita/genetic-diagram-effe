@@ -11,6 +11,22 @@ const CLOUD_ENTITY_KEYS = new Set(['pages', 'phases', 'levels', 'boxes', 'connec
 const CLOUD_DERIVED_KEYS = new Set(['_multiIndex', 'file']);
 const SYNC_MISSING = Symbol('sync-missing');
 
+// URL e chiave pubblica del progetto Supabase (supabase-config.js).
+// Sono valori pubblici per definizione: servono a ogni browser che apre l'app.
+function getBuiltInSupabaseConfig() {
+  const cfg = window.SUPABASE_CONFIG || {};
+  return {
+    url: String(cfg.url || '').trim().replace(/\/+$/, ''),
+    key: String(cfg.anonKey || cfg.anon_key || cfg.key || '').trim()
+  };
+}
+
+function hasSupabaseCredentials() {
+  const builtIn = getBuiltInSupabaseConfig();
+  return !!((builtIn.url && builtIn.key) ||
+    (localStorage.getItem('supabase_url') && localStorage.getItem('supabase_key')));
+}
+
 let supabaseClient = null;          // client Supabase (evita il globale "supabase" del CDN)
 let supabaseConfig = null;          // { url, key }
 let cloudChannel = null;
@@ -102,12 +118,62 @@ function prefillSupabaseBar() {
   const urlEl = document.getElementById('html_supabase_url');
   const keyEl = document.getElementById('html_supabase_key');
   const nameEl = document.getElementById('html_display_name');
-  const storedUrl = localStorage.getItem('supabase_url') || '';
-  const storedKey = localStorage.getItem('supabase_key') || '';
+  const builtIn = getBuiltInSupabaseConfig();
+  const usingBuiltIn = !!(builtIn.url && builtIn.key);
   const storedName = localStorage.getItem('user_display_name') || '';
-  if (urlEl && storedUrl) urlEl.value = storedUrl;
-  if (keyEl && storedKey) keyEl.value = storedKey;
+  if (urlEl) {
+    urlEl.value = builtIn.url || localStorage.getItem('supabase_url') || '';
+    urlEl.style.display = usingBuiltIn ? 'none' : '';
+  }
+  if (keyEl) {
+    keyEl.value = builtIn.key || localStorage.getItem('supabase_key') || '';
+    keyEl.style.display = usingBuiltIn ? 'none' : '';
+  }
   if (nameEl && storedName) nameEl.value = storedName;
+}
+
+// ===== NOME UTENTE / AVVIO SINCRONIZZAZIONE =====
+
+function openNameGate() {
+  const modal = document.getElementById('nameModal');
+  const input = document.getElementById('startName');
+  if (!modal || !input) return;
+  input.value = (localStorage.getItem('user_display_name') || '').trim();
+  modal.classList.remove('hidden');
+  modal.classList.add('open');
+  setTimeout(() => {
+    try { input.focus(); input.select(); } catch (e) {}
+  }, 120);
+}
+
+function closeNameGate() {
+  const modal = document.getElementById('nameModal');
+  if (!modal) return;
+  modal.classList.remove('open');
+  setTimeout(() => modal.classList.add('hidden'), 200);
+}
+
+function submitStartName(ev) {
+  if (ev) ev.preventDefault();
+  const input = document.getElementById('startName');
+  const nameEl = document.getElementById('html_display_name');
+  const name = (input ? input.value : '').trim();
+  if (!name) {
+    showToast('Inserisci il tuo nome per entrare', 'error');
+    if (input) input.focus();
+    return;
+  }
+  localStorage.setItem('user_display_name', name);
+  if (nameEl) nameEl.value = name;
+  closeNameGate();
+  if (!supabaseClient) initSupabase();
+  if (supabaseClient) {
+    setSyncStatus('syncing', 'Connessione...');
+    connectCloud(true);
+    showToast('Ciao ' + name + '! Salvataggio automatico attivo.', 'success');
+  } else {
+    showToast('Supabase non configurato: apri supabase-config.js', 'error');
+  }
 }
 
 function teardownCloud() {
@@ -621,14 +687,13 @@ function initSupabase() {
   cloudGeneration++;
   cloudSyncQueued = false;
   teardownCloud();
-  const urlEl = document.getElementById('html_supabase_url');
-  const keyEl = document.getElementById('html_supabase_key');
-  if ((!localStorage.getItem('supabase_url') || !localStorage.getItem('supabase_key')) && urlEl && keyEl && urlEl.value.trim() && keyEl.value.trim()) {
-    localStorage.setItem('supabase_url', urlEl.value.trim().replace(/\/+$/, ''));
-    localStorage.setItem('supabase_key', keyEl.value.trim());
-  }
-  const url = (localStorage.getItem('supabase_url') || '').trim().replace(/\/+$/, '');
-  const key = (localStorage.getItem('supabase_key') || '').trim();
+  const builtIn = getBuiltInSupabaseConfig();
+  const storedUrl = (localStorage.getItem('supabase_url') || '').trim().replace(/\/+$/, '');
+  const storedKey = (localStorage.getItem('supabase_key') || '').trim();
+  // La configurazione inclusa nell'app ha priorita': chi apre il link GitHub
+  // inserisce solo il nome, senza URL e chiave.
+  const url = builtIn.url || storedUrl;
+  const key = builtIn.key || storedKey;
   prefillSupabaseBar();
   if (!url || !key) {
     supabaseClient = null;
@@ -663,11 +728,14 @@ function saveSupabaseFromHtml() {
   const urlEl = document.getElementById('html_supabase_url');
   const keyEl = document.getElementById('html_supabase_key');
   const nameEl = document.getElementById('html_display_name');
-  const url = (urlEl ? urlEl.value : '').trim().replace(/\/+$/, '');
-  const key = (keyEl ? keyEl.value : '').trim();
+  const builtIn = getBuiltInSupabaseConfig();
+  const typedUrl = (urlEl ? urlEl.value : '').trim().replace(/\/+$/, '');
+  const typedKey = (keyEl ? keyEl.value : '').trim();
+  const url = builtIn.url || typedUrl;
+  const key = builtIn.key || typedKey;
   const name = (nameEl ? nameEl.value : '').trim();
   if (!url || !key) {
-    showToast('Inserisci Supabase URL e Anon Key', 'error');
+    showToast('Supabase non configurato: mancano URL e Anon Key', 'error');
     setSyncStatus('error', 'Credenziali mancanti');
     return;
   }
@@ -675,12 +743,16 @@ function saveSupabaseFromHtml() {
     showToast('URL non valido: deve iniziare con https://', 'error');
     return;
   }
-  localStorage.setItem('supabase_url', url);
-  localStorage.setItem('supabase_key', key);
-  if (name) localStorage.setItem('user_display_name', name);
+  if (!builtIn.url && typedUrl) localStorage.setItem('supabase_url', typedUrl);
+  if (!builtIn.key && typedKey) localStorage.setItem('supabase_key', typedKey);
+  if (name) {
+    localStorage.setItem('user_display_name', name);
+    const gate = document.getElementById('startName');
+    if (gate) gate.value = name;
+  }
   if (initSupabase()) {
     connectCloud(true);
-    showToast('Credenziali salvate. Connessione a Supabase...', 'info');
+    showToast(name ? 'Nome salvato. Sincronizzazione avviata.' : 'Connessione a Supabase...', 'info');
   } else {
     showToast('Impossibile inizializzare Supabase (libreria CDN non caricata?)', 'error');
   }
@@ -1099,7 +1171,7 @@ function initAppState(){
   // Se c'è Supabase, non scrivere subito il default su localStorage: connectCloud adottera'
   // lo stato remoto (se esiste) o scrivera' il locale sul cloud. Scriviamo default solo
   // se non c'è cloud, per non perdere nulla in assenza di connessione.
-  if (!supabaseClient) {
+  if (!supabaseClient && !hasSupabaseCredentials()) {
     saveAppState();
   }
   renderTabs(); renderDiagram();
@@ -2159,14 +2231,28 @@ function syncStickyOffsets(){
 // ===== EVENTS =====
 window.addEventListener('resize', ()=>{ drawSVGConnections(); syncStickyOffsets(); });
 document.addEventListener('DOMContentLoaded', ()=>{
-  initSupabase();
+  const storedName = (localStorage.getItem('user_display_name') || '').trim();
+  prefillSupabaseBar();
+  if (storedName) initSupabase();
   initAppState();
-  if (supabaseClient) connectCloud(true);
+  if (storedName && supabaseClient) connectCloud(true);
+  if (!storedName) openNameGate();
   syncStickyOffsets();
-  // Auto-salvataggio continuo ogni 30 secondi (backup di sicurezza)
+  // Auto-salvataggio continuo ogni 30 secondi (backup di sicurezza).
+  // Parte solo dopo il nome, per non scrivere un diagramma vuoto prima del merge.
   setInterval(() => {
+    if (!(localStorage.getItem('user_display_name') || '').trim()) return;
     try { saveAppState(); } catch (e) {}
   }, 30000);
+});
+
+// I timer in background vengono rallentati dal browser: quando la scheda
+// torna attiva (o torna la rete) riallinea subito lo stato condiviso.
+document.addEventListener('visibilitychange', ()=>{
+  if (document.visibilityState === 'visible' && supabaseClient) requestCloudSync(false);
+});
+window.addEventListener('online', ()=>{
+  if (supabaseClient) requestCloudSync(false);
 });
 
 // Salva in locale e rimuove la presenza alla chiusura della pagina.
