@@ -1906,7 +1906,7 @@ function renderDiagram(){
         const inc=spacesOf(bx.id);
         const act=inc.filter(()=>true);
         const bp=bx.priority||'p1';
-        if(bp==='p1') bc='#22c55e'; else if(bp==='p2') bc='#3b82f6'; else if(bp==='p3') bc='#a855f7'; else if(bp==='p4') bc='#eab308'; else if(bp==='failed') bc='#ef4444';
+        if(bp==='p1') bc='#22c55e'; else if(bp==='p2') bc='rgba(59,130,246,.55)'; else if(bp==='p3') bc='rgba(168,85,247,.4)'; else if(bp==='p4') bc='rgba(234,179,8,.3)'; else if(bp==='failed') bc='rgba(239,68,68,.5)';
 
         let spHTML='';
         if(act.length===0){
@@ -1917,10 +1917,10 @@ function renderDiagram(){
             // La priorita della parte stessa (non della box che la contiene)
             const cp=cn.failed?'failed':(cn.priority||'p1');
             let pb='p1-border', pbc='#22c55e', sopacity=1;
-            if(cp==='p2'){ pb='p2-border'; pbc='#3b82f6'; sopacity=0.85; }
-            else if(cp==='p3'){ pb='p3-border'; pbc='#a855f7'; sopacity=0.7; }
-            else if(cp==='p4'){ pb='p4-border'; pbc='#eab308'; sopacity=0.55; }
-            else if(cp==='failed'){ failedSpaces++; pb='failed-border'; pbc='#ef4444'; sopacity=0.6; }
+            if(cp==='p2'){ pb='p2-border'; pbc='#3b82f6'; sopacity=0.8; }
+            else if(cp==='p3'){ pb='p3-border'; pbc='#a855f7'; sopacity=0.65; }
+            else if(cp==='p4'){ pb='p4-border'; pbc='#eab308'; sopacity=0.5; }
+            else if(cp==='failed'){ failedSpaces++; pb='failed-border'; pbc='#ef4444'; sopacity=0.55; }
             let tpv='';
             if(cn.tableValues&&cn.tableValues.length){
               const visible=cn.tableValues.slice(0,2);
@@ -1941,7 +1941,7 @@ function renderDiagram(){
         const dh=bx.description?`<div class="box-desc">${escapeHtml(bx.description)}</div>`:'';
         // Parti visibili su tutte le fasi; azioni di modifica su tutte tranne la Fase 0
         const ss=iz ? '' : `<div class="spaces-section"><div class="spaces-header">Parti (${act.length})</div><div class="spaces-grid">${spHTML}</div></div>`;
-        const boxDiv=document.createElement('div'); boxDiv.className='box-card'; boxDiv.id='card-'+bx.id; boxDiv.dataset.boxId=bx.id; boxDiv.style.borderColor=bc; boxDiv.innerHTML=`<div class="box-header"><div class="box-title-row" onclick="openBoxTitleModal('${bx.id}')"><span class="box-title">${escapeHtml(bx.title)}</span><div class="box-prio-wrap"><button class="prio-btn prio-${bp}" onclick="event.stopPropagation();togglePriorityMenu('${bx.id}',event)" title="Priorità">${bp==='failed'?'FAIL':bp.toUpperCase()}</button><div class="prio-menu"><button class="prio-opt" onclick="event.stopPropagation();setBoxPriority('${bx.id}','p1')">P1</button><button class="prio-opt" onclick="event.stopPropagation();setBoxPriority('${bx.id}','p2')">P2</button><button class="prio-opt" onclick="event.stopPropagation();setBoxPriority('${bx.id}','p3')">P3</button><button class="prio-opt" onclick="event.stopPropagation();setBoxPriority('${bx.id}','p4')">P4</button><button class="prio-opt" onclick="event.stopPropagation();setBoxPriority('${bx.id}','failed')">FAIL</button></div></div></div>${hb}</div>${dh}${ss}`;
+        const boxDiv=document.createElement('div'); boxDiv.className='box-card box-prio-'+bp; boxDiv.id='card-'+bx.id; boxDiv.dataset.boxId=bx.id; boxDiv.style.borderColor=bc; boxDiv.innerHTML=`<div class="box-header"><div class="box-title-row" onclick="openBoxTitleModal('${bx.id}')"><span class="box-title">${escapeHtml(bx.title)}</span><div class="box-prio-wrap"><button class="prio-btn prio-${bp}" onclick="event.stopPropagation();togglePriorityMenu('${bx.id}',event)" title="Priorità">${bp==='failed'?'FAIL':bp.toUpperCase()}</button><div class="prio-menu"><button class="prio-opt" onclick="event.stopPropagation();setBoxPriority('${bx.id}','p1')">P1</button><button class="prio-opt" onclick="event.stopPropagation();setBoxPriority('${bx.id}','p2')">P2</button><button class="prio-opt" onclick="event.stopPropagation();setBoxPriority('${bx.id}','p3')">P3</button><button class="prio-opt" onclick="event.stopPropagation();setBoxPriority('${bx.id}','p4')">P4</button><button class="prio-opt" onclick="event.stopPropagation();setBoxPriority('${bx.id}','failed')">FAIL</button></div></div></div>${hb}</div>${dh}${ss}`;
         boxesDiv.appendChild(boxDiv);
       });
       if(lv.boxes.length===0) boxesDiv.innerHTML='<div class="conn-message">Nessun modifica presente</div>';
