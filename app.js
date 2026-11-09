@@ -1914,6 +1914,142 @@ function centerOnElement(el){
   scheduleConnectionsRedraw();
 }
 
+// ===== RIORDINO MODIFICHE NELLA ZONA =====
+let reorderState=null;
+function findReorderLevel(){
+  if(!reorderState) return null;
+  const pg=getCurrentPage();
+  const ph=pg.phases.find(p=>p.id===reorderState.pid);
+  return ph ? ph.levels.find(l=>l.id===reorderState.lid) : null;
+}
+function openReorderModal(pid,lid){
+  const pg=getCurrentPage();
+  const ph=pg.phases.find(p=>p.id===pid);
+  const lv=ph && ph.levels.find(l=>l.id===lid);
+  if(!lv) return;
+  document.querySelectorAll('.prio-menu').forEach(m=>m.classList.remove('open'));
+  reorderState={
+    pid,lid,
+    normal:lv.boxes.filter(b=>(b.priority||'p1')!=='failed'),
+    failed:lv.boxes.filter(b=>(b.priority||'p1')==='failed'),
+    draggedId:null
+  };
+  const nameEl=document.getElementById('reorderZoneName');
+  if(nameEl) nameEl.textContent=ph.name+' · '+lv.name;
+  renderReorderList();
+  const m=document.getElementById('reorderModal');
+  m.classList.remove('hidden'); m.classList.add('open');
+}
+function closeReorderModal(){
+  const m=document.getElementById('reorderModal');
+  m.classList.remove('open');
+  setTimeout(()=>m.classList.add('hidden'),200);
+  reorderState=null;
+}
+function reorderBadge(b){
+  const p=b.priority||'p1';
+  return `<span class="reorder-prio prio-${p}">${p==='failed'?'FAIL':p.toUpperCase()}</span>`;
+}
+function renderReorderList(){
+  const list=document.getElementById('reorderList');
+  if(!list) return;
+  if(!reorderState){ list.innerHTML=''; return; }
+  const item=(b,failed)=>`<div class="reorder-item${failed?' failed':''}" data-reorder-id="${b.id}" draggable="true" ondragstart="startReorderDrag(event,'${b.id}')" ondragover="allowReorderDrop(event,'${b.id}')" ondrop="dropReorderItem(event,'${b.id}')" ondragleave="leaveReorderItem(event)" ondragend="endReorderDrag(event)">
+      <span class="reorder-handle">⋮⋮</span>
+      <span class="reorder-title">${escapeHtml(b.title||'Senza titolo')}</span>
+      ${reorderBadge(b)}
+      ${failed?'<span class="reorder-lock">In fondo</span>':''}
+    </div>`;
+  const normal=reorderState.normal.map(b=>item(b,false)).join('');
+  const failed=reorderState.failed.map(b=>item(b,true)).join('');
+  const empty=reorderState.normal.length===0?'<div class="reorder-empty">'+(reorderState.failed.length?'Nessuna modifica attiva: puoi riordinare le fallite tra loro.':'Nessuna modifica da riordinare.')+'</div>':'';
+  const dropzone=reorderState.normal.length>0?`<div class="reorder-dropzone" ondragover="allowReorderEndDrop(event)" ondragleave="clearReorderDrop(event)" ondrop="dropReorderAtEnd(event)">Rilascia qui per l'ultima posizione attiva</div>`:'';
+  list.innerHTML=normal+empty+dropzone+failed;
+}
+function reorderGroupOf(id){
+  if(!reorderState) return null;
+  if(reorderState.normal.some(b=>b.id===id)) return 'normal';
+  if(reorderState.failed.some(b=>b.id===id)) return 'failed';
+  return null;
+}
+function startReorderDrag(ev,id){
+  if(!reorderGroupOf(id)){ ev.preventDefault(); return; }
+  reorderState.draggedId=id;
+  ev.dataTransfer.effectAllowed='move';
+  try{ ev.dataTransfer.setData('text/plain',id); }catch(err){}
+  const el=ev.currentTarget;
+  setTimeout(()=>{ if(el) el.classList.add('dragging'); },0);
+}
+function allowReorderDrop(ev,id){
+  if(!reorderState || !reorderState.draggedId) return;
+  const group=reorderGroupOf(id);
+  if(!group || group!==reorderGroupOf(reorderState.draggedId)) return;
+  ev.preventDefault();
+  ev.dataTransfer.dropEffect='move';
+  document.querySelectorAll('.reorder-item.drag-over').forEach(el=>el.classList.remove('drag-over'));
+  if(ev.currentTarget) ev.currentTarget.classList.add('drag-over');
+}
+function leaveReorderItem(ev){
+  if(ev.currentTarget && !ev.currentTarget.contains(ev.relatedTarget)) ev.currentTarget.classList.remove('drag-over');
+}
+function dropReorderItem(ev,targetId){
+  ev.preventDefault();
+  if(!reorderState || !reorderState.draggedId) return;
+  const group=reorderGroupOf(targetId);
+  if(!group || group!==reorderGroupOf(reorderState.draggedId)){ endReorderDrag(ev); return; }
+  const arr=group==='normal'?reorderState.normal:reorderState.failed;
+  const from=arr.findIndex(b=>b.id===reorderState.draggedId);
+  const target=arr.findIndex(b=>b.id===targetId);
+  if(from<0 || target<0 || from===target){ endReorderDrag(ev); return; }
+  const el=ev.currentTarget;
+  let after=false;
+  if(el){ const r=el.getBoundingClientRect(); after=ev.clientY > r.top + r.height/2; }
+  const [moved]=arr.splice(from,1);
+  let insert=target;
+  if(from<target) insert--;
+  if(after) insert++;
+  arr.splice(Math.max(0,Math.min(arr.length,insert)),0,moved);
+  reorderState.draggedId=null;
+  applyReorder(reorderState.normal, reorderState.failed);
+  endReorderDrag(ev);
+}
+function endReorderDrag(ev){
+  if(reorderState) reorderState.draggedId=null;
+  document.querySelectorAll('.reorder-item.dragging,.reorder-item.drag-over,.reorder-dropzone.drag-over').forEach(el=>el.classList.remove('dragging','drag-over'));
+}
+function allowReorderEndDrop(ev){
+  if(!reorderState || !reorderState.draggedId) return;
+  if(reorderGroupOf(reorderState.draggedId)!=='normal') return;
+  ev.preventDefault();
+  ev.dataTransfer.dropEffect='move';
+  document.querySelectorAll('.reorder-dropzone.drag-over').forEach(el=>el.classList.remove('drag-over'));
+  if(ev.currentTarget) ev.currentTarget.classList.add('drag-over');
+}
+function clearReorderDrop(ev){
+  if(ev.currentTarget) ev.currentTarget.classList.remove('drag-over');
+}
+function dropReorderAtEnd(ev){
+  ev.preventDefault();
+  if(!reorderState || !reorderState.draggedId) return;
+  if(reorderGroupOf(reorderState.draggedId)!=='normal') return;
+  const normal=reorderState.normal;
+  const from=normal.findIndex(b=>b.id===reorderState.draggedId);
+  if(from<0) return;
+  const [moved]=normal.splice(from,1);
+  normal.push(moved);
+  reorderState.draggedId=null;
+  applyReorder(normal, reorderState.failed);
+  endReorderDrag(ev);
+}
+function applyReorder(normal, failed){
+  const lv=findReorderLevel();
+  if(!lv) return;
+  lv.boxes=[...normal, ...failed];
+  saveAppState();
+  renderDiagram();
+  renderReorderList();
+}
+
 // ===== RENDER DIAGRAM (HORIZONTAL) =====
 function renderDiagram(){
   ensureAutomaticCombinations();
@@ -1993,7 +2129,7 @@ function renderDiagram(){
           });
         }
         const iz=pi===0;
-        const hb=iz?'':`<div class="box-actions"><button class="icon-btn" onclick="event.stopPropagation();openManageConnModal('${bx.id}')" title="Gestisci collegamenti"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></button><button class="icon-btn icon-btn-danger" onclick="event.stopPropagation();deleteBox('${bx.id}')" title="Elimina modifica"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg></button></div>`;
+        const hb=iz?'':`<div class="box-actions"><button class="icon-btn" onclick="event.stopPropagation();openReorderModal('${ph.id}','${lv.id}')" title="Riordina modifiche nella zona"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="18" x2="16" y2="18"/></svg></button><button class="icon-btn" onclick="event.stopPropagation();openManageConnModal('${bx.id}')" title="Gestisci collegamenti"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></button><button class="icon-btn icon-btn-danger" onclick="event.stopPropagation();deleteBox('${bx.id}')" title="Elimina modifica"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg></button></div>`;
         const dh=bx.description?`<div class="box-desc">${escapeHtml(bx.description)}</div>`:'';
         // Parti visibili su tutte le fasi; azioni di modifica su tutte tranne la Fase 0
         const ss=iz ? '' : `<div class="spaces-section"><div class="spaces-header">Parti (${act.length})</div><div class="spaces-grid">${spHTML}</div></div>`;

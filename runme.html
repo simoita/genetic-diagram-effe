@@ -6,7 +6,7 @@
 <title>Diagramma Cascata Genetico</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-config.js"></script>
-<link rel="stylesheet" href="styles.css?v=20261109l">
+<link rel="stylesheet" href="styles.css?v=20261109m">
 </head>
 <body>
 <!-- ===== TOOLBAR ===== -->
@@ -228,6 +228,22 @@
 </div>
 </div>
 
+<!-- Reorder Modal -->
+<div class="modal-overlay hidden" id="reorderModal">
+<div class="modal">
+<div class="modal-header">
+<h3 class="modal-title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="18" x2="16" y2="18"/></svg> Riordina modifiche</h3>
+<button class="modal-close" onclick="closeReorderModal()">✕</button>
+</div>
+<div class="modal-content">
+<p class="form-section-text">Trascina le modifiche attive per cambiarne l'ordine nella zona. Le modifiche fallite restano in fondo e puoi riordinarle solo tra loro.</p>
+<div id="reorderZoneName" class="reorder-zone"></div>
+<div id="reorderList" class="reorder-list"></div>
+</div>
+<div class="modal-actions modal-actions-end"><button type="button" class="btn btn-primary" onclick="closeReorderModal()">Chiudi</button></div>
+</div>
+</div>
+
 <!-- Nome utente / avvio sincronizzazione -->
 <div class="modal-overlay hidden" id="nameModal">
 <div class="modal">
@@ -249,6 +265,6 @@
 <div id="toast" class="hidden"></div>
 
 <!-- ===== APP LOGIC ===== -->
-<script src="app.js?v=20261109l"></script>
+<script src="app.js?v=20261109m"></script>
 </body>
 </html>
