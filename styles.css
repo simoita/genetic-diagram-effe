@@ -803,6 +803,26 @@ select.input option { background: #0b1424; color: var(--ink); }
   width: 100%;
 }
 .part-prio-menu .prio-opt:hover { background: rgba(59,130,246,.15); color: #fff; }
+.prio-opt:disabled,
+.part-prio-menu .prio-opt:disabled {
+  opacity: .28;
+  cursor: not-allowed;
+}
+.prio-opt:disabled:hover,
+.part-prio-menu .prio-opt:disabled:hover {
+  background: transparent;
+  color: #cbd5e1;
+}
+.prio-limit {
+  font-size: .5rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: #94a3b8;
+  padding: .12rem .4rem .18rem;
+  border-bottom: 1px solid #22304a;
+  margin-bottom: .08rem;
+  white-space: nowrap;
+}
 
 /* ---------------------------------------------------------------- GERARCHIA PRIORITÀ */
 /* P1 deve emergere; P2-P4 si attenuano progressivamente. */

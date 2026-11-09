@@ -1149,6 +1149,8 @@ const getCurrentPage = () => appState.pages[appState.activePageIndex] || appStat
 const buildBoxIndex = pg => { const map=new Map(); if(!pg || !Array.isArray(pg.phases)) return map; pg.phases.forEach((ph,pi)=>(ph.levels||[]).forEach((lv,li)=>(lv.boxes||[]).forEach(b=>map.set(b.id,{box:b,phase:ph,phaseIdx:pi,level:lv,levelIdx:li})))); return map; };
 const partScore = c => c.failed ? 0 : (Number(c.score)||0);
 const saveAppState = () => {
+  const currentPage = (appState && Array.isArray(appState.pages) && appState.pages[appState.activePageIndex]) || null;
+  if (currentPage) enforcePriorityConstraints(currentPage);
   lastLocalChangeAt = Date.now();
   const changed = captureLocalChanges();
   if (changed > 0) localDocWasBlank = false;
@@ -1583,6 +1585,58 @@ function applyPriorityCascade(pg, box){
   if((box.priority||'p1')==='failed') pg.connections=pg.connections.filter(c=>c.srcBoxId!==box.id);
   pruneAndRebuild(pg);
 }
+// ===== VINCOLI DI PRIORITÀ =====
+// Ordine: P1 (alta) -> P2 -> P3 -> P4 -> FAIL. Una parte non può superare
+// la priorità della modifica che la contiene né quella della parte a monte.
+function prioRank(p){ return p==='failed'?5:p==='p4'?4:p==='p3'?3:p==='p2'?2:1; }
+function prioFromRank(r){ return r>=5?'failed':'p'+Math.max(1,Math.min(4,r)); }
+function prioLabel(r){ return r>=5?'FAIL':'P'+r; }
+function effectivePrio(x){ if(!x) return 'p1'; return x.failed?'failed':(x.priority||'p1'); }
+function sourcePartOf(pg, part){
+  if(!part) return null;
+  const parts=boxSpaces(pg, part.srcBoxId);
+  if(!parts.length) return null;
+  return parts[(Number(part.srcSpaceIndex)||0)%parts.length]||null;
+}
+function partMaxRank(pg, part, boxPrio){
+  let r=prioRank(boxPrio);
+  const src=sourcePartOf(pg, part);
+  if(src) r=Math.max(r, prioRank(effectivePrio(src)));
+  return r;
+}
+function enforcePriorityConstraints(pg){
+  if(!pg || !Array.isArray(pg.connections) || !Array.isArray(pg.phases)) return false;
+  const boxes=new Map();
+  pg.phases.forEach(ph=>(ph.levels||[]).forEach(lv=>(lv.boxes||[]).forEach(b=>boxes.set(b.id,b))));
+  let changed=false;
+  const passes=Math.max(1, pg.connections.length+1);
+  for(let pass=0; pass<passes; pass++){
+    let passChanged=false;
+    for(const c of pg.connections){
+      if(c.disconnected) continue;
+      const box=boxes.get(c.targetBoxId);
+      if(!box) continue;
+      const allowed=partMaxRank(pg, c, box.priority||'p1');
+      if(prioRank(effectivePrio(c))>=allowed) continue;
+      const next=prioFromRank(allowed);
+      if(next==='failed'){
+        if(!c.failed || c.priority!=='failed'){ c.failed=true; c.priority='failed'; changed=true; passChanged=true; }
+      } else if(c.failed || c.priority!==next){
+        c.failed=false; c.priority=next; changed=true; passChanged=true;
+      }
+    }
+    if(!passChanged) break;
+  }
+  return changed;
+}
+function partPriorityMenuMarkup(cid, allowedRank){
+  const hint=allowedRank>1?`<div class='prio-limit'>${allowedRank>=5?'Solo FAIL':'Max P'+allowedRank}</div>`:'';
+  return hint+['p1','p2','p3','p4','failed'].map(p=>{
+    const disabled=prioRank(p)<allowedRank;
+    const label=p==='failed'?'FAIL':p.toUpperCase();
+    return `<button class='prio-opt'${disabled?' disabled':''} title='${disabled?'Non può superare la priorità della modifica o della parte a monte':'Imposta priorità '+label}' onclick="event.stopPropagation();setPartPriority('${cid}','${p}')">${label}</button>`;
+  }).join('');
+}
 // Una parte fallita non si collega piu alle parti delle zone successive
 function applySpaceFailureCascade(pg, part){
   pruneAndRebuild(pg);
@@ -1863,8 +1917,9 @@ function centerOnElement(el){
 // ===== RENDER DIAGRAM (HORIZONTAL) =====
 function renderDiagram(){
   ensureAutomaticCombinations();
-  const cont=document.getElementById('diagramContainer'); cont.innerHTML='';
   const pg=getCurrentPage();
+  enforcePriorityConstraints(pg);
+  const cont=document.getElementById('diagramContainer'); cont.innerHTML='';
   let totalBoxes=0, totalLevels=0, failedSpaces=0;
 
   // build level order for connections
@@ -1916,6 +1971,7 @@ function renderDiagram(){
           act.forEach((cn,si)=>{
             // La priorita della parte stessa (non della box che la contiene)
             const cp=cn.failed?'failed':(cn.priority||'p1');
+            const allowedRank=partMaxRank(pg,cn,bp);
             let pb='p1-border', pbc='#22c55e', sopacity=1;
             if(cp==='p2'){ pb='p2-border'; pbc='#3b82f6'; sopacity=0.8; }
             else if(cp==='p3'){ pb='p3-border'; pbc='#a855f7'; sopacity=0.65; }
@@ -1933,7 +1989,7 @@ function renderDiagram(){
               }
               tpv+='</div>';
             }
-            spHTML+=`<div id="space-${cn.id}" data-conn-id="${cn.id}" data-space-index="${si}" onmouseenter="hoverConn('${cn.id}')" onmouseleave="leaveConn()" onclick="event.stopPropagation();openSpaceModal('${cn.id}')" class="space-card ${pb} space-card-modern${activeHoverPath.includes(cn.id)?' space-active':''}" style="opacity:${sopacity}"><span class="space-number" style="background:${pbc}">${si+1}</span><div id="dot-in-${cn.id}" class="connector-dot connector-in" title="Ingresso"></div><div id="dot-out-${cn.id}" class="connector-dot connector-out" title="Uscita"></div><div class="space-header"><div class="space-file"><span class="truncate" title="${escapeHtml(cn.file)}">${escapeHtml(cn.file||'script.py')}</span></div><div class="part-prio-wrap"><button class="prio-btn-small prio-${cn.failed?'failed':(cn.priority||'p1')}" onclick="event.stopPropagation();togglePartPriorityMenu('${cn.id}',event)" title="Priorità parte">${cn.failed?'FAIL':(cn.priority||'p1').toUpperCase()}</button><div class="prio-menu part-prio-menu"><button class="prio-opt" onclick="event.stopPropagation();setPartPriority('${cn.id}','p1')">P1</button><button class="prio-opt" onclick="event.stopPropagation();setPartPriority('${cn.id}','p2')">P2</button><button class="prio-opt" onclick="event.stopPropagation();setPartPriority('${cn.id}','p3')">P3</button><button class="prio-opt" onclick="event.stopPropagation();setPartPriority('${cn.id}','p4')">P4</button><button class="prio-opt" onclick="event.stopPropagation();setPartPriority('${cn.id}','failed')">FAIL</button></div></div></div><div class="space-source"><span>Da: <b>${escapeHtml(titleOf(cn.srcBoxId))}</b></span><span class="space-score" title="Punteggio">${cn.failed?0:(Number(cn.score)||0)} pt</span></div>${cn.notes?`<p class="space-notes">"${escapeHtml(cn.notes)}"</p>`:''}${tpv}</div>`;
+            spHTML+=`<div id="space-${cn.id}" data-conn-id="${cn.id}" data-space-index="${si}" onmouseenter="hoverConn('${cn.id}')" onmouseleave="leaveConn()" onclick="event.stopPropagation();openSpaceModal('${cn.id}')" class="space-card ${pb} space-card-modern${activeHoverPath.includes(cn.id)?' space-active':''}" style="opacity:${sopacity}"><span class="space-number" style="background:${pbc}">${si+1}</span><div id="dot-in-${cn.id}" class="connector-dot connector-in" title="Ingresso"></div><div id="dot-out-${cn.id}" class="connector-dot connector-out" title="Uscita"></div><div class="space-header"><div class="space-file"><span class="truncate" title="${escapeHtml(cn.file)}">${escapeHtml(cn.file||'script.py')}</span></div><div class="part-prio-wrap"><button class="prio-btn-small prio-${cn.failed?'failed':(cn.priority||'p1')}" onclick="event.stopPropagation();togglePartPriorityMenu('${cn.id}',event)" title="Priorità parte${allowedRank>1?' (max '+prioLabel(allowedRank)+')':''}">${cn.failed?'FAIL':(cn.priority||'p1').toUpperCase()}</button><div class="prio-menu part-prio-menu">${partPriorityMenuMarkup(cn.id,allowedRank)}</div></div></div><div class="space-source"><span>Da: <b>${escapeHtml(titleOf(cn.srcBoxId))}</b></span><span class="space-score" title="Punteggio">${cn.failed?0:(Number(cn.score)||0)} pt</span></div>${cn.notes?`<p class="space-notes">"${escapeHtml(cn.notes)}"</p>`:''}${tpv}</div>`;
           });
         }
         const iz=pi===0;
