@@ -2650,7 +2650,15 @@ function drawSVGConnections(){
       x2=tc.left-vr.left;
       y2=tc.top+tc.height/2-vr.top;
     }
-    segs.push({id:cn.id,x1,y1,x2,y2,cp});
+    segs.push({id:cn.id,x1,y1,x2,y2,cp,seq:segs.length});
+  });
+
+  // Ordine di disegno: prima le priorita' piu' basse, per ultima la P1.
+  // In SVG l'ultimo tracciato disegnato sta sopra: cosi' in caso di
+  // sovrapposizione la strada piu' importante resta visibile.
+  segs.sort((a,b)=>{
+    const d=prioRank(b.cp)-prioRank(a.cp);
+    return d || (a.seq-b.seq);
   });
 
   const activeSet=(activeHoverPath&&activeHoverPath.length)?new Set(activeHoverPath):null;
