@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cascade Bridge</title>
+<style>
+  :root {
+    --bg: #0f1522;
+    --panel: #161f31;
+    --panel-2: #1c2740;
+    --border: #2a3a59;
+    --text: #e7eefc;
+    --dim: #a8b9d4;
+    --muted: #6f83a6;
+    --accent: #22c55e;
+    --accent-ink: #04170c;
+    --blue: #60a5fa;
+    --warn: #eab308;
+    --danger: #ef4444;
+    --mono: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 12px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+  header {
+    padding: 10px 12px 8px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, #16223a, #121a2b);
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
+  .title-row { display: flex; align-items: center; gap: 8px; }
+  .logo {
+    width: 22px; height: 22px; border-radius: 6px;
+    background: linear-gradient(135deg, var(--accent), #0ea5e9);
+    display: grid; place-items: center; color: #04170c; font-weight: 900; font-size: 12px;
+  }
+  h1 { font-size: 13px; margin: 0; letter-spacing: .2px; }
+  .spacer { flex: 1; }
+  .pill {
+    font-size: 9px; text-transform: uppercase; letter-spacing: .5px;
+    padding: 2px 7px; border-radius: 999px; border: 1px solid var(--border);
+    color: var(--dim); white-space: nowrap;
+  }
+  .pill.cloud { color: #86efac; border-color: #1f6b3a; background: rgba(34,197,94,.08); }
+  .pill.file { color: #93c5fd; border-color: #1e4a7a; background: rgba(59,130,246,.08); }
+  .pill.cache { color: #fcd34d; border-color: #6b5510; background: rgba(234,179,8,.08); }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+  button {
+    font: inherit; cursor: pointer; color: var(--text);
+    background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 5px 9px; line-height: 1.2;
+  }
+  button:hover { border-color: #3f5a85; background: #22304d; }
+  button:disabled { opacity: .45; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
+  button.primary:hover { background: #34d873; }
+  button.ghost { background: transparent; }
+  button.small { padding: 3px 7px; font-size: 10px; }
+  button.danger { color: #fca5a5; border-color: #6b2020; }
+  .selectors { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+  .field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .field > span { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  select, input[type="text"], input[type="password"], input[type="number"] {
+    width: 100%; font: inherit; color: var(--text); background: #0c1320;
+    border: 1px solid var(--border); border-radius: 6px; padding: 5px 7px; outline: none;
+  }
+  select:focus, input:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,.15); }
+  .tabs { display: flex; gap: 2px; padding: 0 8px; border-bottom: 1px solid var(--border); background: #111a2a; }
+  .tab {
+    background: transparent; border: 0; border-bottom: 2px solid transparent;
+    border-radius: 0; padding: 8px 9px 7px; color: var(--muted); font-size: 11px;
+  }
+  .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+  main { flex: 1; overflow: auto; padding: 10px 12px 16px; }
+  section { display: none; }
+  section.active { display: block; }
+  .banner {
+    border-radius: 7px; padding: 7px 9px; margin-bottom: 9px; font-size: 11px;
+    border: 1px solid var(--border); background: var(--panel); color: var(--dim);
+  }
+  .banner.error { border-color: #7f1d1d; background: rgba(239,68,68,.1); color: #fca5a5; }
+  .banner.warn { border-color: #6b5510; background: rgba(234,179,8,.08); color: #fde68a; }
+  .banner.success { border-color: #14532d; background: rgba(34,197,94,.08); color: #86efac; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; margin-bottom: 9px; }
+  .card h2 { font-size: 11px; margin: 0 0 7px; color: var(--dim); font-weight: 700; text-transform: uppercase; letter-spacing: .5px; }
+  .kv { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; font-size: 11px; }
+  .kv span { color: var(--muted); }
+  .kv b { font-weight: 600; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; padding: 0 4px 5px; font-weight: 600; }
+  td { padding: 4px; border-top: 1px solid #1e2a42; vertical-align: top; }
+  td.slot { width: 22px; color: var(--muted); font-family: var(--mono); font-size: 10px; padding-top: 8px; }
+  .param-table input { padding: 4px 6px; font-size: 11px; }
+  .fusion-name { font-family: var(--mono); font-size: 10px; color: #bfdbfe; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .badge { display: inline-block; margin-top: 2px; font-size: 8px; padding: 1px 5px; border-radius: 999px; letter-spacing: .3px; }
+  .badge.ok { background: rgba(34,197,94,.14); color: #86efac; }
+  .badge.new { background: rgba(234,179,8,.12); color: #fde68a; }
+  .hint { color: var(--muted); font-size: 10px; margin: 6px 0 0; }
+  .actions { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+  .actions .primary { flex: 1 1 100%; }
+  .empty { text-align: center; padding: 22px 12px; color: var(--muted); }
+  .empty h2 { color: var(--text); font-size: 13px; text-transform: none; letter-spacing: 0; }
+  .empty .actions { justify-content: center; }
+  .phase { border-left: 3px solid var(--accent); margin-bottom: 8px; padding-left: 8px; }
+  .phase-name { font-weight: 700; font-size: 11px; margin-bottom: 4px; }
+  .zone { margin: 5px 0 7px 4px; }
+  .zone-name { font-size: 10px; color: var(--muted); margin-bottom: 3px; }
+  .box { margin-bottom: 5px; }
+  .box-name { font-size: 10px; color: var(--dim); margin: 3px 0; }
+  .part-row {
+    display: flex; align-items: center; gap: 6px; width: 100%;
+    text-align: left; padding: 4px 6px; margin: 2px 0; font-size: 10px;
+    background: #101827; border-color: #22304d;
+  }
+  .part-row.selected { border-color: var(--accent); background: rgba(34,197,94,.08); }
+  .part-row .file { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); }
+  .part-row .prio { font-size: 8px; color: var(--muted); }
+  .file-box { font-family: var(--mono); font-size: 10px; color: #bfdbfe; word-break: break-all; }
+  .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .settings-grid .wide { grid-column: 1 / -1; }
+  label.check { display: flex; gap: 6px; align-items: flex-start; font-size: 11px; color: var(--dim); }
+  label.check input { margin: 2px 0 0; }
+  .log { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 6px; }
+  .log-line { font-size: 9.5px; color: var(--muted); display: flex; gap: 6px; }
+  .log-line .t { font-family: var(--mono); opacity: .7; }
+  .log-line.error { color: #fca5a5; }
+  .log-line.warn { color: #fde68a; }
+  footer { padding: 5px 10px; border-top: 1px solid var(--border); color: var(--muted); font-size: 9px; display: flex; gap: 8px; align-items: center; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); display: inline-block; }
+  .dot.on { background: var(--accent); box-shadow: 0 0 6px rgba(34,197,94,.7); }
+  .busy { opacity: .6; pointer-events: none; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+</style>
+</head>
+<body>
+<header>
+  <div class="title-row">
+    <div class="logo">C</div>
+    <h1>Cascade Bridge</h1>
+    <span id="sourcePill" class="pill">—</span>
+    <span class="spacer"></span>
+    <button class="small" data-action="pickBridgeFile" title="Apri un file ponte JSON esportato dall'app">Carica JSON</button>
+    <button class="small" data-action="refreshCloud" title="Rileggi il diagramma dal cloud">Aggiorna</button>
+  </div>
+  <div class="selectors">
+    <label class="field"><span>Pagina</span><select id="pageSelect"></select></label>
+    <label class="field"><span>Parte / variante</span><select id="partSelect"></select></label>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button class="tab active" data-tab="params">Parametri</button>
+  <button class="tab" data-tab="diagram">Diagramma</button>
+  <button class="tab" data-tab="files">File</button>
+  <button class="tab" data-tab="settings">Impostazioni</button>
+</nav>
+
+<main id="main">
+  <div id="banner" class="banner" style="display:none"></div>
+
+  <section id="tab-params" class="active"></section>
+  <section id="tab-diagram"></section>
+  <section id="tab-files"></section>
+  <section id="tab-settings"></section>
+</main>
+
+<footer>
+  <span id="footerDot" class="dot"></span>
+  <span id="footerText">Avvio…</span>
+  <span class="spacer"></span>
+  <span id="footerUpdated"></span>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  var ui = null;
+  var currentTab = 'params';
+  var dirty = false;
+  var draft = null;
+  var busy = false;
+  var booted = false;
+  var autoTimer = null;
+  var flashTimer = null;
+  var busyTimer = null;
+
+  function esc(value) {
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+  }
+
+  function send(action, extra) {
+    var payload = extra || {};
+    if (ui) {
+      payload.pageId = ui.pageId;
+      payload.partId = ui.partId;
+    }
+    busy = true;
+    document.body.classList.add('busy');
+    setFooter('Sincronizzazione…', false);
+    if (busyTimer) clearTimeout(busyTimer);
+    busyTimer = setTimeout(function () { busy = false; document.body.classList.remove('busy'); }, 30000);
+    try {
+      if (window.adsk && typeof window.adsk.fusionSendData === 'function') {
+        window.adsk.fusionSendData(action, JSON.stringify(payload));
+      } else {
+        showBanner('error', 'Questa palette va aperta dentro Fusion 360 (Add-in > Cascade Bridge).');
+      }
+    } catch (err) {
+      showBanner('error', 'Comunicazione con Fusion non riuscita: ' + err);
+    }
+  }
+
+  function setFooter(text, online) {
+    var dot = document.getElementById('footerDot');
+    var label = document.getElementById('footerText');
+    if (label) label.textContent = text;
+    if (dot) dot.className = 'dot' + (online ? ' on' : '');
+  }
+
+  function showBanner(level, text) {
+    var banner = document.getElementById('banner');
+    if (!banner) return;
+    if (!text) { banner.style.display = 'none'; banner.textContent = ''; return; }
+    banner.className = 'banner ' + (level || 'info');
+    banner.textContent = text;
+    banner.style.display = 'block';
+    if (flashTimer) clearTimeout(flashTimer);
+    if (level !== 'error') {
+      flashTimer = setTimeout(function () { banner.style.display = 'none'; }, 7000);
+    }
+  }
+
+  function formatDate(value) {
+    if (!value) return '';
+    return String(value).replace('T', ' ').replace('Z', '').slice(0, 19);
+  }
+
+  function sourceLabel(source) {
+    if (source === 'cloud') return ['Cloud', 'cloud'];
+    if (source === 'file') return ['File', 'file'];
+    if (source === 'cache') return ['Cache locale', 'cache'];
+    return ['—', ''];
+  }
+
+  function currentRows() {
+    if (draft && ui && draft.pageId === ui.pageId && draft.partId === ui.partId) return draft.rows;
+    return (ui && ui.params) || [];
+  }
+
+  function collectRows() {
+    var rows = [];
+    document.querySelectorAll('#paramBody tr').forEach(function (tr) {
+      var nameInput = tr.querySelector('.pname');
+      var valueInput = tr.querySelector('.pvalue');
+      if (!nameInput || !valueInput) return;
+      rows.push({
+        slot: Number(nameInput.getAttribute('data-slot')),
+        name: nameInput.value,
+        value: valueInput.value
+      });
+    });
+    return rows;
+  }
+
+  function ensureDraft() {
+    if (!ui) return;
+    if (!draft || draft.pageId !== ui.pageId || draft.partId !== ui.partId) {
+      draft = { pageId: ui.pageId, partId: ui.partId, rows: (ui.params || []).map(function (p) {
+        return { slot: p.slot, name: p.name, value: p.value };
+      }) };
+    }
+  }
+
+  function markDirty() {
+    dirty = true;
+    ensureDraft();
+    var hint = document.getElementById('dirtyHint');
+    if (hint) hint.textContent = 'Modifiche non salvate: premi “Salva e applica”.';
+    setFooter('Modifiche locali non salvate', false);
+  }
+
+  function isEditing() {
+    var el = document.activeElement;
+    var tag = el && el.tagName ? el.tagName.toLowerCase() : '';
+    return dirty || tag === 'input' || tag === 'select' || tag === 'textarea';
+  }
+
+  function applyState(next) {
+    if (!next || typeof next !== 'object') return;
+    busy = false;
+    if (busyTimer) clearTimeout(busyTimer);
+    document.body.classList.remove('busy');
+
+    var isError = next.ok === false || (next.flash && next.flash.level === 'error');
+    var previous = ui;
+    ui = next;
+
+    if (!isError) {
+      dirty = false;
+      draft = null;
+    } else if (draft && previous && draft.pageId !== previous.pageId) {
+      draft = null;
+      dirty = false;
+    }
+
+    if (next.ok === false && next.error) {
+      showBanner('error', String(next.error).split('\n').slice(-3).join(' '));
+    } else if (next.flash && next.flash.text) {
+      showBanner(next.flash.level || 'info', next.flash.text);
+    }
+
+    render();
+    scheduleAuto();
+
+    if (!booted) {
+      booted = true;
+      if (ui.cloudConfigured && (!ui.hasBridge || ui.source === 'cache')) {
+        send('refreshCloud', { silent: true });
+      }
+    }
+  }
+
+  window.fusionJavaScriptHandler = {
+    handle: function (action, data) {
+      try {
+        if (action === 'state') {
+          applyState(JSON.parse(data));
+        }
+      } catch (err) {
+        showBanner('error', 'Risposta non valida da Fusion: ' + err);
+      }
+      return 'OK';
+    }
+  };
+
+  function scheduleAuto() {
+    if (autoTimer) clearInterval(autoTimer);
+    autoTimer = setInterval(function () {
+      if (!ui || busy || !ui.settings || !ui.settings.autoRefresh) return;
+      if (currentTab === 'settings' || isEditing() || !ui.cloudConfigured) return;
+      send('refreshCloud', { silent: true });
+    }, 25000);
+  }
+
+  // ---------------------------------------------------------------- render
+
+  function render() {
+    if (!ui) return;
+    var src = sourceLabel(ui.source);
+    var pill = document.getElementById('sourcePill');
+    if (pill) {
+      pill.textContent = src[0];
+      pill.className = 'pill ' + src[1];
+    }
+    document.getElementById('footerUpdated').textContent = ui.updatedAt ? ('agg. ' + formatDate(ui.updatedAt)) : '';
+    setFooter(ui.hasBridge ? ((ui.pages || []).length + ' pagine · ' + ((ui.designName || 'nessun modello'))) :
+      'Nessun diagramma caricato', ui.hasBridge);
+
+    renderSelectors();
+    renderParams();
+    renderDiagram();
+    renderFiles();
+    renderSettings();
+  }
+
+  function renderSelectors() {
+    var pageSelect = document.getElementById('pageSelect');
+    var partSelect = document.getElementById('partSelect');
+    if (!pageSelect || !partSelect) return;
+    var pages = ui.pages || [];
+    pageSelect.innerHTML = pages.length
+      ? pages.map(function (p) {
+        return '<option value="' + esc(p.id) + '"' + (p.id === ui.pageId ? ' selected' : '') + '>' +
+          esc(p.name) + ' (' + p.parts + ')</option>';
+      }).join('')
+      : '<option value="">Nessuna pagina</option>';
+    pageSelect.disabled = pages.length === 0;
+
+    var parts = ui.parts || [];
+    partSelect.innerHTML = parts.length
+      ? parts.map(function (p) {
+        return '<option value="' + esc(p.id) + '"' + (p.id === ui.partId ? ' selected' : '') + '>' +
+          esc(p.file || p.title) + (p.failed ? ' [FAIL]' : '') + '</option>';
+      }).join('')
+      : '<option value="">Nessuna parte</option>';
+    partSelect.disabled = parts.length === 0;
+  }
+
+  function renderParams() {
+    var host = document.getElementById('tab-params');
+    if (!host) return;
+    var srcClass = ui.hasBridge ? '' : '';
+    var bannerHtml = '';
+    if (!ui.hasBridge) {
+      bannerHtml =
+        '<div class="card empty">' +
+        '<h2>Collega il diagramma</h2>' +
+        '<p>Carica il file <b>cascade_fusion_bridge.json</b> esportato dall\'app, oppure configura Supabase nelle impostazioni per leggere e scrivere direttamente il diagramma condiviso.</p>' +
+        '<div class="actions">' +
+        '<button class="primary" data-action="pickBridgeFile">Carica file ponte</button>' +
+        '<button data-action="openSettingsTab">Apri impostazioni</button>' +
+        '</div></div>';
+      host.innerHTML = bannerHtml;
+      return;
+    }
+
+    var rows = currentRows();
+    var body = rows.map(function (row) {
+      var slot = Number(row.slot) || 0;
+      return '<tr>' +
+        '<td class="slot">P' + (slot + 1) + '</td>' +
+        '<td><input class="pname" data-slot="' + slot + '" type="text" value="' + esc(row.name) + '" title="Nome globale: cambiarlo qui aggiorna tutte le parti del diagramma e il parametro in Fusion"></td>' +
+        '<td><input class="pvalue" data-slot="' + slot + '" type="text" value="' + esc(row.value) + '" placeholder="—" title="Valore della variante selezionata"></td>' +
+        '<td><span class="fusion-name" title="' + esc(row.fusionName) + '">' + esc(row.fusionName) + '</span>' +
+        '<span class="badge ' + (row.exists ? 'ok' : 'new') + '">' + (row.exists ? 'esiste' : 'da creare') + '</span></td>' +
+        '</tr>';
+    }).join('');
+
+    var part = ui.selectedPart;
+    host.innerHTML =
+      '<div class="card">' +
+      '<div class="kv"><span>Modello Fusion</span><b>' + esc(ui.hasDesign ? ui.designName : 'nessun Design attivo') + '</b></div>' +
+      '<div class="kv"><span>Parametri utente</span><b>' + (ui.hasDesign ? ui.parameterCount : '—') + '</b></div>' +
+      '<div class="kv"><span>Parte selezionata</span><b>' + esc(part ? (part.file || part.title) : '—') + '</b></div>' +
+      (ui.hasDesign ? '' : '<p class="hint">Apri un modello Fusion per creare o aggiornare i parametri.</p>') +
+      '</div>' +
+
+      '<div class="card">' +
+      '<h2>Parametri</h2>' +
+      '<table class="param-table"><thead><tr><th>#</th><th>Nome diagramma</th><th>Valore parte</th><th>In Fusion</th></tr></thead>' +
+      '<tbody id="paramBody">' + body + '</tbody></table>' +
+      '<p class="hint">Il nome è <b>globale</b>: rinominarlo aggiorna subito tutte le parti del diagramma e il parametro Fusion, insieme a tutte le espressioni che lo usano. Il valore vale per la variante selezionata.</p>' +
+      '<p class="hint" id="dirtyHint">Unità: ' + esc(ui.settings.unit || '—') + '</p>' +
+      '<div class="actions">' +
+      '<button class="primary" data-action="applyBoth"' + (ui.hasDesign ? '' : ' disabled') + '>Salva e applica a Fusion</button>' +
+      '<button data-action="saveDiagram">Salva nel diagramma</button>' +
+      '<button data-action="applyFusion"' + (ui.hasDesign ? '' : ' disabled') + '>Solo Fusion</button>' +
+      '<button data-action="readFusion"' + (ui.hasDesign ? '' : ' disabled') + '>Da Fusion al diagramma</button>' +
+      '<button class="ghost" data-action="refreshNames"' + (ui.hasDesign ? '' : ' disabled') + '>Riallinea nomi</button>' +
+      '</div></div>' +
+
+      '<div class="card">' +
+      '<h2>Ultime operazioni</h2>' +
+      (ui.messages && ui.messages.length
+        ? ui.messages.slice(0, 7).map(function (m) {
+          return '<div class="log-line ' + esc(m.level) + '"><span class="t">' + esc(m.time) + '</span><span>' + esc(m.text) + '</span></div>';
+        }).join('')
+        : '<p class="hint">Nessuna operazione.</p>') +
+      '</div>';
+  }
+
+  function renderDiagram() {
+    var host = document.getElementById('tab-diagram');
+    if (!host) return;
+    if (!ui.hasBridge) {
+      host.innerHTML = '<div class="card empty"><h2>Nessun diagramma</h2><p>Carica un ponte JSON o collegati al cloud.</p></div>';
+      return;
+    }
+    var tree = ui.tree || [];
+    if (!tree.length) {
+      host.innerHTML = '<div class="card empty"><h2>Pagina vuota</h2><p>La pagina selezionata non contiene fasi.</p></div>';
+      return;
+    }
+    var html = tree.map(function (phase) {
+      var zones = (phase.levels || []).map(function (zone) {
+        var boxes = (zone.boxes || []).map(function (box) {
+          var parts = (box.parts || []).map(function (part) {
+            var selected = part.id === ui.partId;
+            return '<button class="part-row' + (selected ? ' selected' : '') + '" data-action="selectPart" data-part-id="' + esc(part.id) + '">' +
+              '<span class="file" title="' + esc(part.file) + '">' + esc(part.file || '(senza file)') + '</span>' +
+              '<span class="prio">' + esc(part.priority) + '</span>' +
+              '</button>';
+          }).join('');
+          return '<div class="box"><div class="box-name">' + esc(box.title) + '</div>' + (parts || '<p class="hint">Nessuna parte attiva.</p>') + '</div>';
+        }).join('');
+        return '<div class="zone"><div class="zone-name">' + esc(zone.name) + '</div>' + boxes + '</div>';
+      }).join('');
+      return '<div class="phase" style="border-left-color:' + esc(phase.color) + '">' +
+        '<div class="phase-name">' + esc(phase.name) + '</div>' + zones + '</div>';
+    }).join('');
+    host.innerHTML = '<div class="card">' + html + '</div>' +
+      '<p class="hint">Seleziona una parte per caricarne i parametri e collegare il file della variante.</p>';
+  }
+
+  function renderFiles() {
+    var host = document.getElementById('tab-files');
+    if (!host) return;
+    if (!ui.hasBridge || !ui.selectedPart) {
+      host.innerHTML = '<div class="card empty"><h2>Nessuna parte selezionata</h2><p>Seleziona una variante nella tab Diagramma.</p></div>';
+      return;
+    }
+    var part = ui.selectedPart;
+    host.innerHTML =
+      '<div class="card">' +
+      '<h2>File della variante</h2>' +
+      '<div class="kv"><span>Nome nel diagramma</span><b>' + esc(part.file || '—') + '</b></div>' +
+      '<div class="kv"><span>Modifica</span><b>' + esc(part.title) + '</b></div>' +
+      '<div class="kv"><span>Fase / zona</span><b>' + esc(part.phase + ' · ' + part.zone) + '</b></div>' +
+      '<p class="hint">File locale collegato:</p>' +
+      '<p class="file-box">' + esc(ui.variantPath || 'nessuno') + '</p>' +
+      '<div class="actions">' +
+      '<button data-action="pickVariantFile">Scegli file…</button>' +
+      '<button data-action="openVariantFile"' + (ui.variantExists ? '' : ' disabled') + '>Apri file</button>' +
+      '<button data-action="insertVariantFile"' + (ui.variantExists ? '' : ' disabled') + '>Inserisci nel modello</button>' +
+      '</div>' +
+      '<p class="hint">L\'inserimento nel modello supporta STEP/STP, IGES, SAT, SMT, F3D e DXF. Il diagramma conserva il nome logico del file; il percorso locale resta su questo computer.</p>' +
+      '</div>' +
+      '<div class="card">' +
+      '<h2>Elenco varianti</h2>' +
+      '<p class="hint">Esporta un CSV con tutte le parti della pagina, i file, le priorità e i 5 parametri (nome e valore).</p>' +
+      '<div class="actions"><button data-action="exportVariants">Esporta elenco CSV</button>' +
+      '<button data-action="openDataFolder">Apri cartella dati</button></div>' +
+      '</div>';
+  }
+
+  function renderSettings() {
+    var host = document.getElementById('tab-settings');
+    if (!host || !ui.settings) return;
+    var s = ui.settings;
+    host.innerHTML =
+      '<div class="card">' +
+      '<h2>Collegamento</h2>' +
+      '<div class="settings-grid">' +
+      '<label class="field wide"><span>Cartella progetto Diagramma Cascata</span>' +
+      '<div style="display:flex;gap:5px"><input type="text" id="setProjectDir" value="' + esc(s.projectDir) + '" placeholder="C:\\\\Users\\\\...\\\\Diagramma cascata">' +
+      '<button type="button" data-action="pickProjectFolder">Sfoglia…</button></div></label>' +
+      '<label class="field wide"><span>URL Supabase</span><input type="text" id="setSupabaseUrl" value="' + esc(s.supabaseUrl) + '" spellcheck="false"></label>' +
+      '<label class="field wide"><span>Chiave publishable / anon</span><input type="password" id="setSupabaseKey" value="' + esc(s.supabaseKey) + '" spellcheck="false"></label>' +
+      '<label class="field wide"><span>ID diagramma condiviso</span><input type="text" id="setDiagramId" value="' + esc(s.diagramId) + '" spellcheck="false"></label>' +
+      '</div></div>' +
+
+      '<div class="card">' +
+      '<h2>Sincronizzazione</h2>' +
+      '<div class="settings-grid">' +
+      '<label class="field"><span>Unità parametri</span><select id="setUnit">' +
+      ['mm', 'cm', 'm', 'in', 'ft', 'deg', 'rad', ''].map(function (u) {
+        return '<option value="' + esc(u) + '"' + (u === s.unit ? ' selected' : '') + '>' + (u || 'nessuna') + '</option>';
+      }).join('') + '</select></label>' +
+      '<div></div>' +
+      '<label class="check wide"><input type="checkbox" id="setAutoRename"' + (s.autoRename ? ' checked' : '') + '> Rinomina subito in Fusion quando il diagramma cambia (senza creare parametri nuovi)</label>' +
+      '<label class="check wide"><input type="checkbox" id="setAutoRefresh"' + (s.autoRefresh ? ' checked' : '') + '> Aggiorna dal cloud ogni 25 secondi mentre la palette è aperta</label>' +
+      '</div>' +
+      '<div class="actions"><button class="primary" data-action="saveSettings">Salva impostazioni</button>' +
+      '<button data-action="openDataFolder">Apri cartella dati</button></div>' +
+      '<p class="hint">La chiave anon è pubblica per progetto, come nell\'app web: non usare mai la service_role.</p>' +
+      '</div>' +
+
+      '<div class="card">' +
+      '<h2>Come funziona</h2>' +
+      '<p class="hint">L\'add-in legge e scrive lo stesso documento Supabase dell\'app web, con merge per campo e controllo di versione. Se il cloud non è configurato puoi usare il file ponte esportato dall\'app.</p>' +
+      '<p class="hint">Rinominare un parametro in Fusion o nel diagramma aggiorna l\'altro lato: Fusion rinomina il parametro e tutte le espressioni che lo referenziano.</p>' +
+      '</div>';
+  }
+
+  // ---------------------------------------------------------------- eventi
+
+  document.addEventListener('click', function (event) {
+    var tabButton = event.target.closest('[data-tab]');
+    if (tabButton) {
+      currentTab = tabButton.getAttribute('data-tab');
+      document.querySelectorAll('.tab').forEach(function (b) { b.classList.toggle('active', b === tabButton); });
+      document.querySelectorAll('main section').forEach(function (section) {
+        section.classList.toggle('active', section.id === 'tab-' + currentTab);
+      });
+      return;
+    }
+
+    var actionButton = event.target.closest('[data-action]');
+    if (!actionButton || actionButton.disabled) return;
+    var action = actionButton.getAttribute('data-action');
+
+    if (action === 'openSettingsTab') {
+      currentTab = 'settings';
+      document.querySelectorAll('.tab').forEach(function (b) {
+        b.classList.toggle('active', b.getAttribute('data-tab') === 'settings');
+      });
+      document.querySelectorAll('main section').forEach(function (section) {
+        section.classList.toggle('active', section.id === 'tab-settings');
+      });
+      return;
+    }
+
+    if (action === 'selectPart') {
+      var partId = actionButton.getAttribute('data-part-id');
+      if (dirty && !confirm('Ci sono modifiche non salvate. Cambiare parte e scartarle?')) return;
+      dirty = false;
+      draft = null;
+      send('selectPart', { pageId: ui.pageId, partId: partId });
+      currentTab = 'params';
+      document.querySelectorAll('.tab').forEach(function (b) {
+        b.classList.toggle('active', b.getAttribute('data-tab') === 'params');
+      });
+      document.querySelectorAll('main section').forEach(function (section) {
+        section.classList.toggle('active', section.id === 'tab-params');
+      });
+      return;
+    }
+
+    if (action === 'applyBoth' || action === 'saveDiagram' || action === 'applyFusion') {
+      send(action, { slots: collectRows() });
+      return;
+    }
+
+    if (action === 'saveSettings') {
+      send('saveSettings', {
+        settings: {
+          projectDir: document.getElementById('setProjectDir').value,
+          supabaseUrl: document.getElementById('setSupabaseUrl').value,
+          supabaseKey: document.getElementById('setSupabaseKey').value,
+          diagramId: document.getElementById('setDiagramId').value,
+          unit: document.getElementById('setUnit').value,
+          autoRename: document.getElementById('setAutoRename').checked,
+          autoRefresh: document.getElementById('setAutoRefresh').checked
+        }
+      });
+      return;
+    }
+
+    send(action, {});
+  });
+
+  document.addEventListener('input', function (event) {
+    var target = event.target;
+    if (target.classList && (target.classList.contains('pname') || target.classList.contains('pvalue'))) {
+      ensureDraft();
+      var slot = Number(target.getAttribute('data-slot'));
+      var row = null;
+      for (var i = 0; i < draft.rows.length; i++) {
+        if (Number(draft.rows[i].slot) === slot) { row = draft.rows[i]; break; }
+      }
+      if (!row) { row = { slot: slot, name: '', value: '' }; draft.rows.push(row); }
+      if (target.classList.contains('pname')) row.name = target.value; else row.value = target.value;
+      markDirty();
+    }
+  });
+
+  document.addEventListener('change', function (event) {
+    var target = event.target;
+    if (target.id === 'pageSelect') {
+      if (dirty && !confirm('Ci sono modifiche non salvate. Cambiare pagina e scartarle?')) {
+        renderSelectors();
+        return;
+      }
+      dirty = false;
+      draft = null;
+      send('selectPage', { pageId: target.value });
+    } else if (target.id === 'partSelect') {
+      if (dirty && !confirm('Ci sono modifiche non salvate. Cambiare parte e scartarle?')) {
+        renderSelectors();
+        return;
+      }
+      dirty = false;
+      draft = null;
+      send('selectPart', { pageId: ui.pageId, partId: target.value });
+    }
+  });
+
+  document.addEventListener('DOMContentLoaded', function () {
+    send('ready', {});
+  });
+})();
+</script>
+</body>
+</html>

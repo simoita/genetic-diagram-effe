@@ -1,0 +1,13 @@
+{
+  "autodeskProduct": "Fusion",
+  "type": "addin",
+  "author": "Diagramma Cascata",
+  "description": {
+    "": "Ponte bidirezionale tra il Diagramma Cascata e Fusion 360: parametri globali, valori delle varianti, rinomina con aggiornamento delle espressioni e file."
+  },
+  "supportedOS": "windows|mac",
+  "editEnabled": true,
+  "version": "1.0.0",
+  "runOnStartup": false,
+  "id": "CascadeBridgeAddIn"
+}

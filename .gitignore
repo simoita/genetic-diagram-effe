@@ -3,3 +3,7 @@
 
 # Link skill locali (creati da `npx skills`, specifici della macchina)
 .claude/skills/
+
+# Python (add-in Fusion)
+__pycache__/
+*.pyc
