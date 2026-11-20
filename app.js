@@ -1239,6 +1239,7 @@ const saveAppState = () => {
   try { persistParamNamesToStorage(appState && appState.tableParamNames); } catch (e) {}
   const currentPage = (appState && Array.isArray(appState.pages) && appState.pages[appState.activePageIndex]) || null;
   if (currentPage) enforcePriorityConstraints(currentPage);
+  if (currentPage) enforceStatusConstraints(currentPage);
   lastLocalChangeAt = Date.now();
   const changed = captureLocalChanges();
   if (changed > 0) localDocWasBlank = false;
@@ -1273,12 +1274,12 @@ function createDefaultPage(name){
   return {
     id:uid('page'), name:name,
     connections:[
-      {id:c1,srcBoxId:p0,srcSpaceIndex:0,targetBoxId:p1a,file:'variante_alpha.py',priority:'p1',score:95,notes:'Strada principale',disconnected:false,tableValues:createDefaultTableValues(),_multiIndex:0},
-      {id:c2,srcBoxId:p0,srcSpaceIndex:0,targetBoxId:p1b,file:'variante_beta.py',priority:'p1',score:70,notes:'Strada secondaria',disconnected:false,tableValues:createDefaultTableValues(),_multiIndex:1}
+      {id:c1,srcBoxId:p0,srcSpaceIndex:0,targetBoxId:p1a,file:'variante_alpha.py',priority:'p1',status:'todo',score:95,notes:'Strada principale',disconnected:false,tableValues:createDefaultTableValues(),_multiIndex:0},
+      {id:c2,srcBoxId:p0,srcSpaceIndex:0,targetBoxId:p1b,file:'variante_beta.py',priority:'p1',status:'todo',score:70,notes:'Strada secondaria',disconnected:false,tableValues:createDefaultTableValues(),_multiIndex:1}
     ],
     phases:[
-      {id:uid('phase'),name:'Fase 0 (Partenza)',color:'#ff0000',status:'done',levels:[{id:uid('level'),name:'Zona 1',boxes:[{id:p0,title:'Radice Iniziale A0',priority:'p1'}]}]},
-      {id:uid('phase'),name:'Fase 1',color:'#00ff00',status:'todo',levels:[{id:uid('level'),name:'Zona 1',boxes:[{id:p1a,title:'Modifica Alpha',priority:'p1'},{id:p1b,title:'Modifica Beta',priority:'p2'}]}]}
+      {id:uid('phase'),name:'Fase 0 (Partenza)',color:'#ff0000',status:'done',levels:[{id:uid('level'),name:'Zona 1',boxes:[{id:p0,title:'Radice Iniziale A0',priority:'p1',status:'todo'}]}]},
+      {id:uid('phase'),name:'Fase 1',color:'#00ff00',status:'todo',levels:[{id:uid('level'),name:'Zona 1',boxes:[{id:p1a,title:'Modifica Alpha',priority:'p1',status:'todo'},{id:p1b,title:'Modifica Beta',priority:'p2',status:'todo'}]}]}
     ]
   };
 }
@@ -1435,7 +1436,7 @@ function createBidirectionalConnectionsForLevel(pg, phase, newLevel){
   if(li>0) newLevel.boxes.forEach(nb=>connectLevelToBox(pg, phase.levels[li-1], nb));
   if(li<phase.levels.length-1) newLevel.boxes.forEach(nb=>connectBoxToLevel(pg, nb, phase.levels[li+1]));
 }
-function addBoxToLevel(pid,lid){ const pg=getCurrentPage(); const p=pg.phases.find(x=>x.id===pid); const phaseIdx=pg.phases.indexOf(p); if(!p||phaseIdx===0){ alert('Fase 0 ha 1 sola modifica'); return } const lv=p.levels.find(x=>x.id===lid); if(!lv) return; const li=p.levels.indexOf(lv); let prevBoxes=[]; if(li>0) prevBoxes=p.levels[li-1].boxes; else { const pp=pg.phases[phaseIdx-1]; if(pp&&pp.levels.length) prevBoxes=pp.levels[pp.levels.length-1].boxes; } if(prevBoxes.length===0){ alert('Impossibile creare la modifica: la zona precedente non ha modifiche, quindi non esisterebbero parti da collegare.'); return } const n=lv.boxes.length+1; const newBox={id:uid('box'),title:'Nodo #'+n,priority:'p1'}; lv.boxes.push(newBox); createBidirectionalConnectionsWithinPhase(pg, p, lv, newBox); if(li===0) createConnectionsFromPreviousPhases(pg, newBox.id); connectBoxToNextPhase(pg, p, lv, newBox); ensureAutomaticCombinations(); showToast('Modifica creata con '+pg.connections.filter(c=>c.targetBoxId===newBox.id&&!c.disconnected).length+' parti','success'); saveAppState(); renderDiagram(); }
+function addBoxToLevel(pid,lid){ const pg=getCurrentPage(); const p=pg.phases.find(x=>x.id===pid); const phaseIdx=pg.phases.indexOf(p); if(!p||phaseIdx===0){ alert('Fase 0 ha 1 sola modifica'); return } const lv=p.levels.find(x=>x.id===lid); if(!lv) return; const li=p.levels.indexOf(lv); let prevBoxes=[]; if(li>0) prevBoxes=p.levels[li-1].boxes; else { const pp=pg.phases[phaseIdx-1]; if(pp&&pp.levels.length) prevBoxes=pp.levels[pp.levels.length-1].boxes; } if(prevBoxes.length===0){ alert('Impossibile creare la modifica: la zona precedente non ha modifiche, quindi non esisterebbero parti da collegare.'); return } const n=lv.boxes.length+1; const newBox={id:uid('box'),title:'Nodo #'+n,priority:'p1',status:'todo'}; lv.boxes.push(newBox); createBidirectionalConnectionsWithinPhase(pg, p, lv, newBox); if(li===0) createConnectionsFromPreviousPhases(pg, newBox.id); connectBoxToNextPhase(pg, p, lv, newBox); ensureAutomaticCombinations(); showToast('Modifica creata con '+pg.connections.filter(c=>c.targetBoxId===newBox.id&&!c.disconnected).length+' parti','success'); saveAppState(); renderDiagram(); }
 // Numero di parti attivi (strade in entrata) di una modifica
 // Una modifica fallita non produce parti: le sue uscite non contano
 function failedBoxIds(pg){
@@ -1542,7 +1543,7 @@ function connectLevelToBox(pg, prevLevel, targetBox, onlyMissing){
       pg.connections.push({
         id:uid('conn'), srcBoxId:srcBox.id, srcSpaceIndex:outlet, targetBoxId:targetBox.id,
         file:autoRoadFileName(srcBox,targetBox), priority:srcBox.priority||'p1',
-        score:50, notes:'', disconnected:false,
+        score:50, notes:'', disconnected:false, status:'todo',
         tableValues:createDefaultTableValues(),
         _multiIndex:boxSpaceCount(pg,targetBox.id)
       });
@@ -1560,7 +1561,7 @@ function connectBoxToLevel(pg, srcBox, nextLevel){
       pg.connections.push({
         id:uid('conn'), srcBoxId:srcBox.id, srcSpaceIndex:outlet, targetBoxId:tgtBox.id,
         file:autoRoadFileName(srcBox,tgtBox), priority:srcBox.priority||'p1',
-        score:50, notes:'', disconnected:false,
+        score:50, notes:'', disconnected:false, status:'todo',
         tableValues:createDefaultTableValues(),
         _multiIndex:boxSpaceCount(pg,tgtBox.id)
       });
@@ -1682,6 +1683,44 @@ function prioRank(p){ return p==='failed'?5:p==='p4'?4:p==='p3'?3:p==='p2'?2:1; 
 function prioFromRank(r){ return r>=5?'failed':'p'+Math.max(1,Math.min(4,r)); }
 function prioLabel(r){ return r>=5?'FAIL':'P'+r; }
 function effectivePrio(x){ if(!x) return 'p1'; return x.failed?'failed':(x.priority||'p1'); }
+// ===== STATI: DA FARE / IN CORSO / COMPLETATA =====
+const STATUS_VALUES=['todo','in-progress','done'];
+function normalizeStatus(s){ return STATUS_VALUES.includes(s)?s:'todo'; }
+function statusLabel(s){ s=normalizeStatus(s); return s==='done'?'Completata':s==='in-progress'?'In corso':'Da fare'; }
+function nextStatus(s){ const i=STATUS_VALUES.indexOf(normalizeStatus(s)); return STATUS_VALUES[(i+1)%STATUS_VALUES.length]; }
+function statusChipMarkup(status, onclick, titlePrefix){
+  const s=normalizeStatus(status);
+  return `<button type="button" class="status-chip status-${s}" onclick="event.stopPropagation();${onclick}" title="${titlePrefix||'Cambia stato'}: ${statusLabel(s)}"><span class="status-dot"></span>${statusLabel(s)}</button>`;
+}
+// Una fase completata rende completate tutte le sue modifiche e le parti di
+// quelle modifiche. Una modifica completata rende completate le sue parti.
+function enforceStatusConstraints(pg){
+  if(!pg||!Array.isArray(pg.phases)||!Array.isArray(pg.connections)) return false;
+  let changed=false;
+  const boxInfo=new Map();
+  pg.phases.forEach(ph=>{
+    const pst=normalizeStatus(ph.status);
+    if(ph.status!==pst){ ph.status=pst; changed=true; }
+    const phaseDone=pst==='done';
+    (ph.levels||[]).forEach(lv=>{
+      (lv.boxes||[]).forEach(b=>{
+        const bst=normalizeStatus(b.status);
+        if(b.status!==bst){ b.status=bst; changed=true; }
+        if(phaseDone && b.status!=='done'){ b.status='done'; changed=true; }
+        boxInfo.set(b.id,{box:b,phase:ph,phaseDone});
+      });
+    });
+  });
+  pg.connections.forEach(c=>{
+    const cst=normalizeStatus(c.status);
+    if(c.status!==cst){ c.status=cst; changed=true; }
+    const info=boxInfo.get(c.targetBoxId);
+    if(info && (info.phaseDone || info.box.status==='done') && c.status!=='done'){
+      c.status='done'; changed=true;
+    }
+  });
+  return changed;
+}
 function sourcePartOf(pg, part){
   if(!part) return null;
   const parts=boxSpaces(pg, part.srcBoxId);
@@ -1735,7 +1774,28 @@ function deleteLevel(pid,lid){ const pg=getCurrentPage(); const p=pg.phases.find
 function deletePhase(pid){ const pg=getCurrentPage(); const i=pg.phases.findIndex(x=>x.id===pid); if(i===0){ alert('Fase 0 non eliminabile'); return } if(pg.phases.length<=1){ alert('Almeno una fase'); return } const ph=pg.phases.find(x=>x.id===pid); if(ph){ ph.levels.forEach(l=>l.boxes.forEach(b=>pg.connections=pg.connections.filter(c=>c.srcBoxId!==b.id&&c.targetBoxId!==b.id))); } pg.phases=pg.phases.filter(x=>x.id!==pid); saveAppState(); renderDiagram(); }
 function updatePhaseName(pid,val){ const pg=getCurrentPage(); const ph=pg.phases.find(x=>x.id===pid); const phaseIdx=pg.phases.indexOf(ph); if(ph&&phaseIdx===pg.phases.length-1){ ph.name=val; saveAppState(); } }
 function updatePhaseColor(pid,col){ const pg=getCurrentPage(); const ph=pg.phases.find(x=>x.id===pid); const phaseIdx=pg.phases.indexOf(ph); if(ph&&phaseIdx===pg.phases.length-1){ ph.color=col; saveAppState(); renderDiagram(); } }
-function togglePhaseStatus(pid){ const pg=getCurrentPage(); const ph=pg.phases.find(x=>x.id===pid); const phaseIdx=pg.phases.indexOf(ph); if(!ph||phaseIdx===0||phaseIdx < pg.phases.length-1) return; const ord=['todo','in-progress','done']; ph.status=ord[(ord.indexOf(ph.status||'todo')+1)%3]; saveAppState(); renderDiagram(); }
+function togglePhaseStatus(pid){ const pg=getCurrentPage(); const ph=pg.phases.find(x=>x.id===pid); if(!ph) return; ph.status=nextStatus(ph.status); enforceStatusConstraints(pg); saveAppState(); renderDiagram(); }
+function cycleBoxStatus(bid){
+  const pg=getCurrentPage();
+  for(const ph of pg.phases) for(const lv of ph.levels){
+    const b=lv.boxes.find(x=>x.id===bid);
+    if(b){
+      const phaseDone=normalizeStatus(ph.status)==='done';
+      b.status=nextStatus(b.status);
+      if(phaseDone) showToast('Fase completata: riapri la fase per cambiare lo stato delle modifiche','info');
+      enforceStatusConstraints(pg); saveAppState(); renderDiagram(); return;
+    }
+  }
+}
+function cyclePartStatus(cid){
+  const pg=getCurrentPage(); const c=pg.connections.find(x=>x.id===cid);
+  if(!c) return;
+  const info=buildBoxIndex(pg).get(c.targetBoxId);
+  const parentDone=!!info && (normalizeStatus(info.phase.status)==='done' || normalizeStatus(info.box.status)==='done');
+  c.status=nextStatus(c.status);
+  if(parentDone) showToast('Modifica o fase completata: riapri il livello superiore per cambiare lo stato della parte','info');
+  enforceStatusConstraints(pg); saveAppState(); renderDiagram();
+}
 function toggleColorMenu(pid){ document.getElementById('color-menu-'+pid)?.classList.toggle('hidden'); }
 function toggleSpaceTable(btn,id){ const el=document.getElementById(id); if(!el||!btn) return; const nowHidden=el.classList.toggle('hidden'); btn.textContent=nowHidden?'Mostra altro':'Nascondi'; btn.classList.toggle('expanded',!nowHidden); }
 
@@ -1820,13 +1880,13 @@ function saveFailReason(e) {
 }
 
 // ===== BOX DETAIL MODAL =====
-function openBoxTitleModal(bid){ const pg=getCurrentPage(); let box=null; for(const ph of pg.phases) for(const lv of ph.levels){ const b=lv.boxes.find(x=>x.id===bid); if(b){ box=b; break } } if(!box) return; document.getElementById('editBoxId').value=bid; document.getElementById('editBoxTitle').value=box.title||''; document.getElementById('editBoxDesc').value=box.description||''; document.getElementById('editBoxPriority').value=box.priority||'p1'; document.getElementById('editBoxFailReason').value=box.failReason||''; toggleFailReasonField('editBoxFailReasonGroup',(box.priority||'p1')==='failed');
+function openBoxTitleModal(bid){ const pg=getCurrentPage(); let box=null; for(const ph of pg.phases) for(const lv of ph.levels){ const b=lv.boxes.find(x=>x.id===bid); if(b){ box=b; break } } if(!box) return; document.getElementById('editBoxId').value=bid; document.getElementById('editBoxTitle').value=box.title||''; document.getElementById('editBoxDesc').value=box.description||''; document.getElementById('editBoxPriority').value=box.priority||'p1'; document.getElementById('editBoxFailReason').value=box.failReason||''; document.getElementById('editBoxStatus').value=normalizeStatus(box.status); toggleFailReasonField('editBoxFailReasonGroup',(box.priority||'p1')==='failed');
   const m=document.getElementById('boxModal'); m.classList.remove('hidden'); m.classList.add('open'); }
 function closeBoxModal(){ const m=document.getElementById('boxModal'); m.classList.remove('open'); setTimeout(()=>{ m.classList.add('hidden'); }, 200); }
-function saveBoxTitle(e){ e.preventDefault(); const pg=getCurrentPage(); const bid=document.getElementById('editBoxId').value; const nt=document.getElementById('editBoxTitle').value; const nd=document.getElementById('editBoxDesc').value; const np=document.getElementById('editBoxPriority').value; const reasonEl=document.getElementById('editBoxFailReason'); const nfr=reasonEl?reasonEl.value.trim():''; let box=null, before='p1'; for(const ph of pg.phases) for(const lv of ph.levels){ const b=lv.boxes.find(x=>x.id===bid); if(b){ before=b.priority||'p1'; b.title=nt; b.description=nd; b.priority=np; b.failReason=nfr; box=b; break } } if(box && before!==np) applyPriorityCascade(pg, box); closeBoxModal(); saveAppState(); renderDiagram(); if(box && np==='failed' && before!=='failed'){ propagateFailReasonToParts(pg, box.id, box.failReason); setTimeout(()=>openFailReasonModal('box', box.id), 240); } }
+function saveBoxTitle(e){ e.preventDefault(); const pg=getCurrentPage(); const bid=document.getElementById('editBoxId').value; const nt=document.getElementById('editBoxTitle').value; const nd=document.getElementById('editBoxDesc').value; const np=document.getElementById('editBoxPriority').value; const reasonEl=document.getElementById('editBoxFailReason'); const nfr=reasonEl?reasonEl.value.trim():''; const boxStatusEl=document.getElementById('editBoxStatus'); const nstatus=boxStatusEl?boxStatusEl.value:'todo'; let box=null, before='p1'; for(const ph of pg.phases) for(const lv of ph.levels){ const b=lv.boxes.find(x=>x.id===bid); if(b){ before=b.priority||'p1'; b.title=nt; b.description=nd; b.priority=np; b.status=nstatus; b.failReason=nfr; box=b; break } } if(box && before!==np) applyPriorityCascade(pg, box); enforceStatusConstraints(pg); closeBoxModal(); saveAppState(); renderDiagram(); if(box && np==='failed' && before!=='failed'){ propagateFailReasonToParts(pg, box.id, box.failReason); setTimeout(()=>openFailReasonModal('box', box.id), 240); } }
 
 // ===== SPACE MODAL =====
-function openSpaceModal(cid){ const pg=getCurrentPage(); const c=pg.connections.find(x=>x.id===cid); if(!c) return; document.getElementById('spaceConnId').value=cid; document.getElementById('spaceFailed').checked=!!c.failed; document.getElementById('spaceFile').value=c.file||''; document.getElementById('spaceScore').value=c.score??0; document.getElementById('spaceNotes').value=c.notes||''; document.getElementById('spaceFailReason').value=c.failReason||''; toggleFailReasonField('spaceFailReasonGroup',!!c.failed); document.getElementById('spaceModalSrc').textContent=findBoxTitle(c.srcBoxId); document.getElementById('spaceModalTarget').textContent=findBoxTitle(c.targetBoxId); if(!c.tableValues||c.tableValues.length<5) c.tableValues=createDefaultTableValues();
+function openSpaceModal(cid){ const pg=getCurrentPage(); const c=pg.connections.find(x=>x.id===cid); if(!c) return; document.getElementById('spaceConnId').value=cid; document.getElementById('spaceFailed').checked=!!c.failed; document.getElementById('spaceFile').value=c.file||''; document.getElementById('spaceScore').value=c.score??0; document.getElementById('spaceNotes').value=c.notes||''; document.getElementById('spaceFailReason').value=c.failReason||''; document.getElementById('spaceStatus').value=normalizeStatus(c.status); toggleFailReasonField('spaceFailReasonGroup',!!c.failed); document.getElementById('spaceModalSrc').textContent=findBoxTitle(c.srcBoxId); document.getElementById('spaceModalTarget').textContent=findBoxTitle(c.targetBoxId); if(!c.tableValues||c.tableValues.length<5) c.tableValues=createDefaultTableValues();
   // I nomi sono globali: mostra sempre quelli correnti, anche per le parti
   // create prima di una rinomina.
   const globalNames=getGlobalNames();
@@ -1860,10 +1920,13 @@ function saveSpaceForm(e){
   const wasFailed=!!c.failed;
   const spaceReasonEl=document.getElementById('spaceFailReason');
   if(spaceReasonEl) c.failReason=spaceReasonEl.value.trim();
+  const spaceStatusEl=document.getElementById('spaceStatus');
+  if(spaceStatusEl) c.status=spaceStatusEl.value;
   c.failed=document.getElementById('spaceFailed').checked;
   c.score=parseFloat(document.getElementById('spaceScore').value)||0;
   c.notes=document.getElementById('spaceNotes').value;
   if(wasFailed!==!!c.failed) applySpaceFailureCascade(pg, c);
+  enforceStatusConstraints(pg);
   closeSpaceModal(); saveAppState(); renderDiagram();
   if(!wasFailed && c.failed){ propagateFailReasonToParts(pg, c.targetBoxId, c.failReason); setTimeout(()=>openFailReasonModal('part', c.id), 240); }
 }
@@ -2068,7 +2131,7 @@ function toggleConnectionFromManager(sid,tid){
         pg.connections.push({
           id:uid('conn'), srcBoxId:sid, srcSpaceIndex:outlet, targetBoxId:tid,
           file:autoRoadFileName(srcBox,tgtBox), 
-          score:50, notes:'', disconnected:false,
+          score:50, notes:'', disconnected:false, status:'todo',
           tableValues:createDefaultTableValues(),
           _multiIndex:boxSpaceCount(pg,tid)
         });
@@ -2405,6 +2468,7 @@ function renderDiagram(){
   ensureAutomaticCombinations();
   const pg=getCurrentPage();
   enforcePriorityConstraints(pg);
+  enforceStatusConstraints(pg);
   const cont=document.getElementById('diagramContainer'); cont.innerHTML='';
   let totalBoxes=0, totalLevels=0, failedSpaces=0;
 
@@ -2424,13 +2488,13 @@ function renderDiagram(){
   pg.phases.forEach((ph,pi)=>{
     const phBlock=document.createElement('div'); phBlock.className='phase-block'; phBlock.dataset.phaseId=ph.id; phBlock.style.borderColor=ph.color||'#3b82f6';
     const ps=ph.status||'todo'; let sb='';
-    if(ps==='in-progress') sb='<span class="badge badge-in"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> In Corso</span>';
-    else if(ps==='done') sb='<span class="badge badge-done"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Completata</span>';
-    else sb='<span class="badge badge-todo"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/></svg> Da Fare</span>';
+    if(ps==='in-progress') sb=`<button type="button" class="badge badge-in status-toggle" onclick="event.stopPropagation();togglePhaseStatus('${ph.id}')" title="Cambia stato"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> In corso</button>`;
+    else if(ps==='done') sb=`<button type="button" class="badge badge-done status-toggle" onclick="event.stopPropagation();togglePhaseStatus('${ph.id}')" title="Cambia stato"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Completata</button>`;
+    else sb=`<button type="button" class="badge badge-todo status-toggle" onclick="event.stopPropagation();togglePhaseStatus('${ph.id}')" title="Cambia stato"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/></svg> Da fare</button>`;
 
     // phase header
     const phHeader=document.createElement('div'); phHeader.className='phase-header';
-    phHeader.innerHTML=`<div class="phase-header-top"><div class="flex items-center gap-2"><span class="phase-color-dot" style="background:${ph.color||'#22c55e'}"></span><input type="text" value="${escapeHtml(ph.name)}" onchange="updatePhaseName('${ph.id}',this.value)" class="phase-name-input">${sb}</div>${pi!==0?`<div class="phase-actions"><div class="relative" title="Cambia colore"><button class="icon-btn" onclick="toggleColorMenu('${ph.id}')" style="width:1.8rem;height:1.8rem;background:${ph.color||'#22c55e'};border:none;border-radius:.5rem"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg></button><div id="color-menu-${ph.id}" class="color-menu hidden">${['#ff0000','#ff7f00','#ffff00','#00ff00','#0000ff','#4b0082','#9400d3'].map(c=>`<button class="color-btn${c===(ph.color||'#22c55e')?' active':''}" onclick="updatePhaseColor('${ph.id}','${c}');toggleColorMenu('${ph.id}')" style="background:${c}" title="${c}"></button>`).join('')}</div></div><button class="btn btn-sm ${ps==='in-progress'?'btn-primary':ps==='done'?'btn-primary':'btn-ghost'}" onclick="togglePhaseStatus('${ph.id}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${ps==='in-progress'?'<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16">':ps==='done'?'<polyline points="20 6 9 17 4 12">':'<polygon points="5 3 19 12 5 21 5 3">'}</svg> ${ps==='in-progress'?'In Corso':ps==='done'?'Riapri':'Inizia'}</button><button class="btn btn-secondary btn-sm" onclick="addLevelToPhase('${ph.id}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Zona</button><button class="btn btn-danger btn-sm" onclick="deletePhase('${ph.id}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg> Elimina</button></div>`:''}</div>`;
+    phHeader.innerHTML=`<div class="phase-header-top"><div class="flex items-center gap-2"><span class="phase-color-dot" style="background:${ph.color||'#22c55e'}"></span><input type="text" value="${escapeHtml(ph.name)}" onchange="updatePhaseName('${ph.id}',this.value)" class="phase-name-input">${sb}</div>${pi!==0?`<div class="phase-actions"><div class="relative" title="Cambia colore"><button class="icon-btn" onclick="toggleColorMenu('${ph.id}')" style="width:1.8rem;height:1.8rem;background:${ph.color||'#22c55e'};border:none;border-radius:.5rem"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg></button><div id="color-menu-${ph.id}" class="color-menu hidden">${['#ff0000','#ff7f00','#ffff00','#00ff00','#0000ff','#4b0082','#9400d3'].map(c=>`<button class="color-btn${c===(ph.color||'#22c55e')?' active':''}" onclick="updatePhaseColor('${ph.id}','${c}');toggleColorMenu('${ph.id}')" style="background:${c}" title="${c}"></button>`).join('')}</div></div><button class="btn btn-secondary btn-sm" onclick="addLevelToPhase('${ph.id}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Zona</button><button class="btn btn-danger btn-sm" onclick="deletePhase('${ph.id}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg> Elimina</button></div>`:''}</div>`;
     phBlock.appendChild(phHeader);
 
     // levels container
@@ -2447,6 +2511,7 @@ function renderDiagram(){
         const inc=spacesOf(bx.id);
         const act=inc.filter(()=>true);
         const bp=bx.priority||'p1';
+        const bst=normalizeStatus(bx.status);
         if(bp==='p1') bc='#22c55e'; else if(bp==='p2') bc='rgba(59,130,246,.55)'; else if(bp==='p3') bc='rgba(168,85,247,.4)'; else if(bp==='p4') bc='rgba(234,179,8,.3)'; else if(bp==='failed') bc='rgba(239,68,68,.5)';
 
         let spHTML='';
@@ -2457,6 +2522,7 @@ function renderDiagram(){
           act.forEach((cn,si)=>{
             // La priorita della parte stessa (non della box che la contiene)
             const cp=cn.failed?'failed':(cn.priority||'p1');
+            const cst=normalizeStatus(cn.status);
             const allowedRank=partMaxRank(pg,cn,bp);
             let pb='p1-border', pbc='#22c55e', sopacity=1;
             if(cp==='p2'){ pb='p2-border'; pbc='#3b82f6'; sopacity=0.8; }
@@ -2475,7 +2541,7 @@ function renderDiagram(){
               }
               tpv+='</div>';
             }
-            spHTML+=`<div id="space-${cn.id}" data-conn-id="${cn.id}" data-space-index="${si}" onmouseenter="hoverConn('${cn.id}')" onmouseleave="leaveConn()" onclick="event.stopPropagation();openSpaceModal('${cn.id}')" class="space-card ${pb} space-card-modern${activeHoverPath.includes(cn.id)?' space-active':''}" style="opacity:${sopacity}"><span class="space-number" style="background:${pbc}">${si+1}</span><div id="dot-in-${cn.id}" class="connector-dot connector-in" title="Ingresso"></div><div id="dot-out-${cn.id}" class="connector-dot connector-out" title="Uscita"></div><div class="space-header"><div class="space-file"><span class="truncate" title="${escapeHtml(cn.file)}">${escapeHtml(cn.file||'script.py')}</span></div><div class="part-prio-wrap"><button class="prio-btn-small prio-${cn.failed?'failed':(cn.priority||'p1')}" onclick="event.stopPropagation();togglePartPriorityMenu('${cn.id}',event)" title="Priorità parte${allowedRank>1?' (max '+prioLabel(allowedRank)+')':''}">${cn.failed?'FAIL':(cn.priority||'p1').toUpperCase()}</button><div class="prio-menu part-prio-menu">${partPriorityMenuMarkup(cn.id,allowedRank)}</div></div></div><div class="space-source"><span>Da: <b>${escapeHtml(titleOf(cn.srcBoxId))}</b></span><span class="space-score" title="Punteggio">${cn.failed?0:(Number(cn.score)||0)} pt</span></div>${cn.notes?`<p class="space-notes">"${escapeHtml(cn.notes)}"</p>`:''}${cn.failed&&cn.failReason?`<p class="space-fail-reason"><b>Motivo:</b> ${escapeHtml(cn.failReason)}</p>`:''}${tpv}</div>`;
+            spHTML+=`<div id="space-${cn.id}" data-conn-id="${cn.id}" data-space-index="${si}" onmouseenter="hoverConn('${cn.id}')" onmouseleave="leaveConn()" onclick="event.stopPropagation();openSpaceModal('${cn.id}')" class="space-card ${pb} space-card-modern${activeHoverPath.includes(cn.id)?' space-active':''}" style="opacity:${sopacity}"><span class="space-number" style="background:${pbc}">${si+1}</span><div id="dot-in-${cn.id}" class="connector-dot connector-in" title="Ingresso"></div><div id="dot-out-${cn.id}" class="connector-dot connector-out" title="Uscita"></div><div class="space-header"><div class="space-file"><span class="truncate" title="${escapeHtml(cn.file)}">${escapeHtml(cn.file||'script.py')}</span></div><div class="part-prio-wrap">${statusChipMarkup(cst, `cyclePartStatus('${cn.id}')`)}<button class="prio-btn-small prio-${cn.failed?'failed':(cn.priority||'p1')}" onclick="event.stopPropagation();togglePartPriorityMenu('${cn.id}',event)" title="Priorità parte${allowedRank>1?' (max '+prioLabel(allowedRank)+')':''}">${cn.failed?'FAIL':(cn.priority||'p1').toUpperCase()}</button><div class="prio-menu part-prio-menu">${partPriorityMenuMarkup(cn.id,allowedRank)}</div></div></div><div class="space-source"><span>Da: <b>${escapeHtml(titleOf(cn.srcBoxId))}</b></span><span class="space-score" title="Punteggio">${cn.failed?0:(Number(cn.score)||0)} pt</span></div>${cn.notes?`<p class="space-notes">"${escapeHtml(cn.notes)}"</p>`:''}${cn.failed&&cn.failReason?`<p class="space-fail-reason"><b>Motivo:</b> ${escapeHtml(cn.failReason)}</p>`:''}${tpv}</div>`;
           });
         }
         const iz=pi===0;
@@ -2484,7 +2550,7 @@ function renderDiagram(){
         const fr=(bx.priority==='failed'&&bx.failReason)?`<div class="box-fail-reason"><b>Motivo:</b> ${escapeHtml(bx.failReason)}</div>`:'';
         // Parti visibili su tutte le fasi; azioni di modifica su tutte tranne la Fase 0
         const ss=iz ? '' : `<div class="spaces-section"><div class="spaces-header">Parti (${act.length})</div><div class="spaces-grid">${spHTML}</div></div>`;
-        const boxDiv=document.createElement('div'); boxDiv.className='box-card box-prio-'+bp; boxDiv.id='card-'+bx.id; boxDiv.dataset.boxId=bx.id; boxDiv.style.borderColor=bc; boxDiv.innerHTML=`<div class="box-header"><div class="box-title-row" onclick="openBoxTitleModal('${bx.id}')"><span class="box-title">${escapeHtml(bx.title)}</span><div class="box-prio-wrap"><button class="prio-btn prio-${bp}" onclick="event.stopPropagation();togglePriorityMenu('${bx.id}',event)" title="Priorità">${bp==='failed'?'FAIL':bp.toUpperCase()}</button><div class="prio-menu"><button class="prio-opt" onclick="event.stopPropagation();setBoxPriority('${bx.id}','p1')">P1</button><button class="prio-opt" onclick="event.stopPropagation();setBoxPriority('${bx.id}','p2')">P2</button><button class="prio-opt" onclick="event.stopPropagation();setBoxPriority('${bx.id}','p3')">P3</button><button class="prio-opt" onclick="event.stopPropagation();setBoxPriority('${bx.id}','p4')">P4</button><button class="prio-opt" onclick="event.stopPropagation();setBoxPriority('${bx.id}','failed')">FAIL</button></div></div></div>${hb}</div>${dh}${fr}${ss}`;
+        const boxDiv=document.createElement('div'); boxDiv.className='box-card box-prio-'+bp; boxDiv.id='card-'+bx.id; boxDiv.dataset.boxId=bx.id; boxDiv.style.borderColor=bc; boxDiv.innerHTML=`<div class="box-header"><div class="box-title-row" onclick="openBoxTitleModal('${bx.id}')"><span class="box-title">${escapeHtml(bx.title)}</span><div class="box-prio-wrap"><button class="prio-btn prio-${bp}" onclick="event.stopPropagation();togglePriorityMenu('${bx.id}',event)" title="Priorità">${bp==='failed'?'FAIL':bp.toUpperCase()}</button><div class="prio-menu"><button class="prio-opt" onclick="event.stopPropagation();setBoxPriority('${bx.id}','p1')">P1</button><button class="prio-opt" onclick="event.stopPropagation();setBoxPriority('${bx.id}','p2')">P2</button><button class="prio-opt" onclick="event.stopPropagation();setBoxPriority('${bx.id}','p3')">P3</button><button class="prio-opt" onclick="event.stopPropagation();setBoxPriority('${bx.id}','p4')">P4</button><button class="prio-opt" onclick="event.stopPropagation();setBoxPriority('${bx.id}','failed')">FAIL</button></div></div>${statusChipMarkup(bst, `cycleBoxStatus('${bx.id}')`)}</div>${hb}</div>${dh}${fr}${ss}`;
         boxesDiv.appendChild(boxDiv);
       });
       if(lv.boxes.length===0) boxesDiv.innerHTML='<div class="conn-message">Nessun modifica presente</div>';

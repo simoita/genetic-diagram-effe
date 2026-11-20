@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#0f172a">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-config.js"></script>
-<link rel="stylesheet" href="styles.css?v=20261120b">
+<link rel="stylesheet" href="styles.css?v=20261120c">
 </head>
 <body>
 <!-- ===== TOOLBAR ===== -->
@@ -140,6 +140,7 @@
 <div class="form-group"><label class="label">Nome File (automatico)</label><input type="text" class="input" id="spaceFile" readonly title="Generato dal percorso della cascata"><p class="form-section-text" style="margin:.35rem 0 0">Il nome segue il percorso: Macchina A_1a.2b_1c (zona della fase + ordine della parte nella zona).</p></div>
 <div class="form-group"><label class="checkbox-row"><input type="checkbox" id="spaceFailed" onchange="toggleFailReasonField('spaceFailReasonGroup', this.checked)"> Segna questa parte come fallita</label></div>
 <div class="form-group hidden" id="spaceFailReasonGroup"><label class="label" for="spaceFailReason">Motivo del fallimento</label><textarea class="input" id="spaceFailReason" rows="3" placeholder="Perché questa parte è fallita? Descrivi il motivo…" style="resize:none"></textarea></div>
+<div class="form-group"><label class="label" for="spaceStatus">Stato</label><select class="input" id="spaceStatus"><option value="todo">Da fare</option><option value="in-progress">In corso</option><option value="done">Completata</option></select></div>
 <div class="form-group"><label class="label">Punteggio Strada</label><input type="number" class="input" id="spaceScore" step="any" value="0" style="font-family:monospace"></div>
 
 <div class="form-group"><label class="label">Note Specifiche</label><textarea class="input" id="spaceNotes" rows="2" placeholder="Inserisci note sulla strada..." style="resize:none"></textarea></div>
@@ -180,6 +181,7 @@
 </select>
 </div>
 
+<div class="form-group"><label class="label" for="editBoxStatus">Stato</label><select class="input" id="editBoxStatus"><option value="todo">Da fare</option><option value="in-progress">In corso</option><option value="done">Completata</option></select></div>
 <div class="form-group hidden" id="editBoxFailReasonGroup"><label class="label" for="editBoxFailReason">Motivo del fallimento</label><textarea class="input" id="editBoxFailReason" rows="3" placeholder="Perché questa modifica è fallita? Descrivi il motivo…" style="resize:none"></textarea></div>
 <div class="modal-actions"><button type="button" class="btn btn-secondary" onclick="closeBoxModal()">Chiudi</button><button type="submit" class="btn btn-primary">Salva Modifiche</button></div>
 </form>
@@ -319,6 +321,6 @@
 <div id="toast" class="hidden"></div>
 
 <!-- ===== APP LOGIC ===== -->
-<script src="app.js?v=20261120b"></script>
+<script src="app.js?v=20261120c"></script>
 </body>
 </html>
