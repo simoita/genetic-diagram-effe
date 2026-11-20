@@ -1870,32 +1870,69 @@ function saveSpaceForm(e){
 function toggleConnectionState(cid){ const c=getCurrentPage().connections.find(x=>x.id===cid); if(c){ c.disconnected=!c.disconnected; saveAppState(); renderDiagram(); } }
 function cycleBoxPriority(bid){ const pg=getCurrentPage(); for(const ph of pg.phases) for(const lv of ph.levels){ const b=lv.boxes.find(x=>x.id===bid); if(b){ const ord=['p1','p2','p3','p4','failed']; let i=ord.indexOf(b.priority||'p1'); i=(i+1)%5; b.priority=ord[i]; saveAppState(); renderDiagram(); if(ord[i]==='failed') setTimeout(()=>openFailReasonModal('box', bid), 120); return; } } }
 function toggleConnFailed(cid){ const pg=getCurrentPage(); const c=pg.connections.find(x=>x.id===cid); if(c){ c.failed=!c.failed; const nowFailed=!!c.failed; saveAppState(); const el=document.getElementById('space-'+cid); if(el){ el.classList.add('failed-part'); setTimeout(()=>el.classList.remove('failed-part'),600); } renderDiagram(); if(nowFailed) setTimeout(()=>openFailReasonModal('part', cid), 120); } }
-function positionPriorityMenu(btn, menu){
-  menu.classList.remove('drop-up');
-  const r=btn.getBoundingClientRect();
-  const h=menu.offsetHeight||150;
-  if(r.bottom+h+16>window.innerHeight && r.top-h-16>0) menu.classList.add('drop-up');
+let prioMenuAnchor = null;
+function getPriorityLayer(){
+  let layer=document.getElementById('prioMenuLayer');
+  if(!layer){
+    layer=document.createElement('div');
+    layer.id='prioMenuLayer';
+    layer.className='prio-menu-floating hidden';
+    layer.setAttribute('role','menu');
+    document.body.appendChild(layer);
+  }
+  return layer;
 }
 function closeAllPriorityMenus(){
-  document.querySelectorAll('.prio-menu').forEach(m=>m.classList.remove('open','drop-up'));
+  const layer=document.getElementById('prioMenuLayer');
+  if(layer){ layer.classList.add('hidden'); layer.innerHTML=''; }
+  prioMenuAnchor=null;
+  document.querySelectorAll('.prio-menu.open').forEach(m=>m.classList.remove('open','drop-up'));
   document.querySelectorAll('.menu-open').forEach(el=>el.classList.remove('menu-open'));
+}
+// Il menu viene mostrato in un layer fissato al body: non eredita l'opacita
+// delle schede e non puo' finire dietro altri componenti, quindi resta
+// sempre opaco e cliccabile.
+function positionPriorityMenu(btn, layer){
+  layer.style.left='0px';
+  layer.style.top='0px';
+  const r=btn.getBoundingClientRect();
+  const w=layer.offsetWidth, h=layer.offsetHeight;
+  let left=r.right-w;
+  if(left<8) left=8;
+  if(left+w>window.innerWidth-8) left=Math.max(8,window.innerWidth-w-8);
+  let top=r.bottom+6;
+  if(top+h>window.innerHeight-8) top=Math.max(8,r.top-h-6);
+  layer.style.left=Math.round(left)+'px';
+  layer.style.top=Math.round(top)+'px';
+}
+function openPriorityMenu(btn){
+  const source=btn && btn.nextElementSibling;
+  if(!source) return;
+  const layer=getPriorityLayer();
+  layer.innerHTML=source.innerHTML;
+  layer.classList.remove('hidden');
+  layer.style.visibility='hidden';
+  prioMenuAnchor=btn;
+  const card=btn.closest('.box-card, .space-card');
+  if(card) card.classList.add('menu-open');
+  positionPriorityMenu(btn, layer);
+  layer.style.visibility='';
 }
 function togglePriorityMenu(bid, ev){
   ev.stopPropagation();
   const btn=ev.currentTarget;
-  const menu=btn.nextElementSibling;
-  const wasOpen=!!(menu && menu.classList.contains('open'));
+  const layer=getPriorityLayer();
+  if(prioMenuAnchor===btn && !layer.classList.contains('hidden')){ closeAllPriorityMenus(); return; }
   closeAllPriorityMenus();
-  if(!menu || wasOpen) return;
-  menu.classList.add('open');
-  const card=btn.closest('.box-card, .space-card');
-  if(card) card.classList.add('menu-open');
-  positionPriorityMenu(btn, menu);
+  openPriorityMenu(btn);
 }
 document.addEventListener('click', (ev)=>{
-  if(ev.target.closest('.prio-menu') || ev.target.closest('.prio-btn') || ev.target.closest('.prio-btn-small')) return;
+  if(ev.target.closest('#prioMenuLayer')) return;
+  if(ev.target.closest('.prio-btn') || ev.target.closest('.prio-btn-small')) return;
   closeAllPriorityMenus();
 });
+document.addEventListener('keydown', (ev)=>{ if(ev.key==='Escape') closeAllPriorityMenus(); });
+window.addEventListener('resize', closeAllPriorityMenus);
 function setBoxPriority(bid,p){
   const pg=getCurrentPage();
   for(const ph of pg.phases) for(const lv of ph.levels){
@@ -1936,16 +1973,13 @@ function setPartPriority(cid,p){
   }
   closeAllPriorityMenus();
 }
-function togglePartPriorityMenu(cid, ev){ var wasOpen=!!(ev.currentTarget.nextElementSibling && ev.currentTarget.nextElementSibling.classList.contains('open'));
+function togglePartPriorityMenu(cid, ev){
   ev.stopPropagation();
-  closeAllPriorityMenus();
   const btn=ev.currentTarget;
-  const menu=btn.nextElementSibling;
-  if(!menu || wasOpen) return;
-  menu.classList.add('open');
-  const card=btn.closest('.box-card, .space-card');
-  if(card) card.classList.add('menu-open');
-  positionPriorityMenu(btn, menu);
+  const layer=getPriorityLayer();
+  if(prioMenuAnchor===btn && !layer.classList.contains('hidden')){ closeAllPriorityMenus(); return; }
+  closeAllPriorityMenus();
+  openPriorityMenu(btn);
 }
 
 // ===== MANAGE CONNECTIONS MODAL =====
@@ -2630,7 +2664,7 @@ function clampScale(value){ return Math.min(Math.max(MIN_SCALE, value), MAX_SCAL
 
 function updateTransform(){
   const cont = document.getElementById('diagramContainer');
-  if(cont) cont.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+  if(cont) cont.style.transform = `translate3d(${panX}px, ${panY}px, 0) scale(${scale})`;
 }
 
 // Ridisegna le strade al massimo una volta per frame (pan e zoom fluidi)
@@ -2673,34 +2707,51 @@ function startPan(e){
   if(e.button !== 0) return;
   if(e.target.closest('.box-card') || e.target.closest('.space-card') || e.target.closest('.modal-overlay') || e.target.closest('button') || e.target.closest('input') || e.target.closest('.box-title-row') || e.target.closest('.level-title')) return;
   isPanning = true;
+  closeAllPriorityMenus();
   startX = e.clientX;
   startY = e.clientY;
+  panPointerX = e.clientX;
+  panPointerY = e.clientY;
   panDeltaX = 0;
   panDeltaY = 0;
   const svg = document.getElementById('svg-canvas');
-  if(svg) svg.style.transform = 'translate(0px, 0px)';
+  if(svg) svg.style.transform = 'translate3d(0px, 0px, 0)';
   document.getElementById('viewport').classList.add('panning');
 }
 
-function doPan(e){
+// Il pan viene applicato al massimo una volta per frame: gli eventi del mouse
+// (anche 1000 al secondo) non forzano un ricalcolo dello stile per ognuno.
+let panFrame = 0;
+let panPointerX = 0, panPointerY = 0;
+function flushPan(){
   if(!isPanning) return;
-  const dx = e.clientX - startX;
-  const dy = e.clientY - startY;
+  const dx = panPointerX - startX;
+  const dy = panPointerY - startY;
+  if(!dx && !dy) return;
+  startX = panPointerX;
+  startY = panPointerY;
   // Direzioni invertite: il diagramma segue il puntatore
   panX = panX + dx;
   panY = panY + dy;
   panDeltaX += dx;
   panDeltaY += dy;
-  startX = e.clientX;
-  startY = e.clientY;
   updateTransform();
   // Le strade seguono il puntatore con la stessa traslazione: nessun ridisegno per frame
   const svg = document.getElementById('svg-canvas');
-  if(svg) svg.style.transform = `translate(${panDeltaX}px, ${panDeltaY}px)`;
+  if(svg) svg.style.transform = `translate3d(${panDeltaX}px, ${panDeltaY}px, 0)`;
+}
+function doPan(e){
+  if(!isPanning) return;
+  panPointerX = e.clientX;
+  panPointerY = e.clientY;
+  if(panFrame) return;
+  panFrame = requestAnimationFrame(()=>{ panFrame = 0; flushPan(); });
 }
 
 function endPan(){
   if(!isPanning) return;
+  if(panFrame){ cancelAnimationFrame(panFrame); panFrame = 0; }
+  flushPan();
   isPanning = false;
   document.getElementById('viewport').classList.remove('panning');
   const svg = document.getElementById('svg-canvas');
@@ -2711,6 +2762,7 @@ function endPan(){
 // Lo zoom avviene con la rotella del mouse (e col pinch del trackpad)
 document.getElementById('viewport').addEventListener('wheel', function(e){
   e.preventDefault();
+  closeAllPriorityMenus();
   const factor = e.deltaY > 0 ? 1 / ZOOM_FACTOR : ZOOM_FACTOR;
   zoomAt(scale * factor, e.clientX, e.clientY);
 }, {passive:false});

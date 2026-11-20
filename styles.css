@@ -1836,3 +1836,43 @@ select.input option { background: #0b1424; color: var(--ink); }
 /* Linee guida interfaccia (skill web-design-guidelines) */
 html { color-scheme: dark; }
 .modal { overscroll-behavior: contain; }
+
+/* ---------------------------------------------------------------- MENU FLOTTANTE PRIORITÀ */
+.prio-menu-floating {
+  position: fixed;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: .1rem;
+  min-width: 84px;
+  padding: .2rem;
+  background: #0f1a2c;
+  border: 1px solid #2a3b5a;
+  border-radius: .5rem;
+  box-shadow: 0 18px 40px -12px #000, 0 0 0 1px rgba(0,0,0,.45);
+  opacity: 1;
+  pointer-events: auto;
+}
+.prio-menu-floating.hidden { display: none !important; }
+.prio-menu-floating .prio-opt {
+  font-size: .62rem;
+  padding: .3rem .6rem;
+  border-radius: .3rem;
+  background: transparent;
+  color: #cbd5e1;
+  text-align: left;
+  width: 100%;
+}
+.prio-menu-floating .prio-opt:hover { background: rgba(59,130,246,.2); color: #fff; }
+.prio-menu-floating .prio-opt:disabled { opacity: .3; cursor: not-allowed; }
+.prio-menu-floating .prio-opt:disabled:hover { background: transparent; color: #cbd5e1; }
+
+/* ---------------------------------------------------------------- PAN FLUIDO */
+/* Durante il trascinamento si disattivano hover e transizioni del contenuto:
+   il browser sposta solo il layer composto, senza ricalcolare le schede. */
+.viewport.panning .phases-container { pointer-events: none; }
+.viewport.panning #diagramContainer,
+.viewport.panning #svg-canvas { will-change: transform; }
+.viewport.panning .box-card,
+.viewport.panning .space-card { transition: none !important; }
+.viewport.panning .box-card:hover { transform: none; }
