@@ -4,9 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Diagramma Cascata Genetico</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<meta name="theme-color" content="#0f172a">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-config.js"></script>
-<link rel="stylesheet" href="styles.css?v=20261109m">
+<link rel="stylesheet" href="styles.css?v=20261120a">
 </head>
 <body>
 <!-- ===== TOOLBAR ===== -->
@@ -57,6 +59,7 @@
 <input type="file" id="importFile" accept=".json" class="hidden" onchange="loadFile(event)">
 </label>
 <button class="btn btn-secondary" onclick="openSettingsModal()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg> Impostazioni</button>
+<button class="btn btn-secondary fusion-toolbar-btn" onclick="openFusionModal()" title="Collega il diagramma a Fusion 360"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l8 4.5v9L12 20l-8-4.5v-9L12 2z"/><path d="M12 7v6M9 10h6"/></svg> Fusion 360</button>
 <button class="btn btn-danger" onclick="clearAll()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg> Reset</button>
 </div>
 </header>
@@ -135,7 +138,8 @@
   </div>
 </div>
 <div class="form-group"><label class="label">Nome File (automatico)</label><input type="text" class="input" id="spaceFile" readonly title="Generato dal percorso della cascata"><p class="form-section-text" style="margin:.35rem 0 0">Il nome segue il percorso: Macchina A_1a.2b_1c (zona della fase + ordine della parte nella zona).</p></div>
-<div class="form-group"><label class="checkbox-row"><input type="checkbox" id="spaceFailed"> Segna questa parte come fallita</label></div>
+<div class="form-group"><label class="checkbox-row"><input type="checkbox" id="spaceFailed" onchange="toggleFailReasonField('spaceFailReasonGroup', this.checked)"> Segna questa parte come fallita</label></div>
+<div class="form-group hidden" id="spaceFailReasonGroup"><label class="label" for="spaceFailReason">Motivo del fallimento</label><textarea class="input" id="spaceFailReason" rows="3" placeholder="Perché questa parte è fallita? Descrivi il motivo…" style="resize:none"></textarea></div>
 <div class="form-group"><label class="label">Punteggio Strada</label><input type="number" class="input" id="spaceScore" step="any" value="0" style="font-family:monospace"></div>
 
 <div class="form-group"><label class="label">Note Specifiche</label><textarea class="input" id="spaceNotes" rows="2" placeholder="Inserisci note sulla strada..." style="resize:none"></textarea></div>
@@ -167,7 +171,7 @@
 <div class="form-group"><label class="label">Descrizione</label><textarea class="input" id="editBoxDesc" rows="3" placeholder="Descrizione della modifica..." style="resize:none"></textarea></div>
 <div class="form-group">
 <label class="label">Priorità</label>
-<select class="input" id="editBoxPriority">
+<select class="input" id="editBoxPriority" onchange="toggleFailReasonField('editBoxFailReasonGroup', this.value==='failed')">
 <option value="p1">P1 - Alta (Verde)</option>
 <option value="p2">P2 - Media (Blu)</option>
 <option value="p3">P3 - Bassa (Viola)</option>
@@ -176,6 +180,7 @@
 </select>
 </div>
 
+<div class="form-group hidden" id="editBoxFailReasonGroup"><label class="label" for="editBoxFailReason">Motivo del fallimento</label><textarea class="input" id="editBoxFailReason" rows="3" placeholder="Perché questa modifica è fallita? Descrivi il motivo…" style="resize:none"></textarea></div>
 <div class="modal-actions"><button type="button" class="btn btn-secondary" onclick="closeBoxModal()">Chiudi</button><button type="submit" class="btn btn-primary">Salva Modifiche</button></div>
 </form>
 </div>
@@ -221,8 +226,16 @@
 <button class="modal-close" onclick="closeSettingsModal()">✕</button>
 </div>
 <form id="settingsForm" onsubmit="saveSettings(event)">
-<p class="form-section-text">Imposta i nomi dei 5 parametri della tabella. Usati in <b>tutti le parti</b> di tutte le pagine.</p>
+<p class="form-section-text">Imposta i nomi dei 5 parametri della tabella. Sono usati in <b>tutte le parti</b> di tutte le pagine: rinominando un parametro il nome cambia subito ovunque, anche nelle parti già esistenti.</p>
 <div id="settingsParamInputs" class="table-inputs"></div>
+<div class="fusion-settings">
+  <div class="form-section-header">Fusion 360</div>
+  <p class="form-section-text">Esporta il diagramma con le coordinate del cloud per l'add-in Cascade Bridge. I nomi dei parametri vengono allineati anche nel modello Fusion.</p>
+  <div class="fusion-settings-actions">
+    <button type="button" class="btn btn-secondary btn-sm" onclick="exportFusionBridge()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg> Scarica ponte Fusion</button>
+    <button type="button" class="btn btn-ghost btn-sm" onclick="closeSettingsModal();openFusionModal();">Istruzioni</button>
+  </div>
+</div>
 <div class="modal-actions"><button type="button" class="btn btn-secondary" onclick="resetSettingsToDefault()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8"/><path d="M21 12v5a2 2 0 01-2 2h-5"/></svg> Ripristina Default</button><button type="submit" class="btn btn-primary">Salva Impostazioni</button></div>
 </form>
 </div>
@@ -261,10 +274,49 @@
 </div>
 </div>
 
+<!-- Fusion 360 Bridge -->
+<div class="modal-overlay hidden" id="fusionModal">
+<div class="modal fusion-modal">
+<div class="modal-header">
+<h3 class="modal-title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2"><path d="M12 2l8 4.5v9L12 20l-8-4.5v-9L12 2z"/><path d="M12 7v6M9 10h6"/></svg> Ponte Fusion 360</h3>
+<button class="modal-close" onclick="closeFusionModal()">✕</button>
+</div>
+<div class="modal-content fusion-content">
+  <p class="form-section-text">Collega il diagramma direttamente a Fusion 360: parametri, valori delle varianti e file restano allineati nelle due direzioni.</p>
+  <div class="fusion-steps">
+    <div class="fusion-step"><span class="fusion-step-num">1</span><div><b>Installa l'add-in</b><p>Esegui <code>fusion360\installa_addin.bat</code>, poi in Fusion apri <b>Strumenti → Add-in → Script e Add-in</b>, scheda Add-in, seleziona <b>Cascade Bridge</b> e premi Run.</p></div></div>
+    <div class="fusion-step"><span class="fusion-step-num">2</span><div><b>Scarica il ponte</b><p>Il file contiene il diagramma e le coordinate del cloud: caricalo nella palette con <b>Carica JSON</b>, oppure scegli la cartella progetto nelle impostazioni dell'add-in per collegarti direttamente a Supabase.</p></div></div>
+    <div class="fusion-step"><span class="fusion-step-num">3</span><div><b>Sincronizza</b><p>In Fusion premi <b>Salva e applica a Fusion</b>. I parametri vengono creati o aggiornati; se rinomini un parametro nel diagramma, Fusion rinomina lo stesso parametro e aggiorna tutte le espressioni che lo usano.</p></div></div>
+  </div>
+  <div class="fusion-actions">
+    <button class="btn btn-primary" onclick="exportFusionBridge()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg> Scarica ponte Fusion (.json)</button>
+  </div>
+  <p class="fusion-info" id="fusionBridgeInfo"></p>
+  <p class="form-section-text fusion-note"><b>Rinomina globale:</b> cambiando il nome di un parametro nelle impostazioni o nel dettaglio di una parte, il nuovo nome viene applicato subito a tutte le parti del diagramma, comprese quelle create prima. L'add-in riporta la rinomina in Fusion, dove il parametro mantiene il valore e tutte le espressioni collegate continuano a funzionare.</p>
+</div>
+<div class="modal-actions modal-actions-end"><button type="button" class="btn btn-secondary" onclick="closeFusionModal()">Chiudi</button></div>
+</div>
+</div>
+
+<!-- Motivo Fallimento Modal -->
+<div class="modal-overlay hidden" id="failReasonModal" role="dialog" aria-modal="true" aria-labelledby="failReasonTitle">
+<div class="modal">
+<div class="modal-header">
+<h3 class="modal-title" id="failReasonTitle"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Motivo del fallimento</h3>
+<button type="button" class="modal-close" onclick="cancelFailReason()" aria-label="Chiudi">✕</button>
+</div>
+<form id="failReasonForm" onsubmit="saveFailReason(event)">
+<p class="form-section-text" id="failReasonContext"></p>
+<div class="form-group"><label class="label" for="failReasonText">Perché è fallita?</label><textarea class="input" id="failReasonText" rows="4" placeholder="Es. tool rotto, parametro fuori tolleranza…" style="resize:none"></textarea></div>
+<div class="modal-actions"><button type="button" class="btn btn-secondary" onclick="cancelFailReason()">Annulla</button><button type="submit" class="btn btn-primary">Salva motivo</button></div>
+</form>
+</div>
+</div>
+
 <!-- Toast -->
 <div id="toast" class="hidden"></div>
 
 <!-- ===== APP LOGIC ===== -->
-<script src="app.js?v=20261109m"></script>
+<script src="app.js?v=20261120a"></script>
 </body>
 </html>

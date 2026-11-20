@@ -1758,3 +1758,81 @@ select.input option { background: #0b1424; color: var(--ink); }
 }
 
 /* ---------------------------------------------------------------- FINE */
+
+/* ---------------------------------------------------------------- FUSION 360 */
+.fusion-toolbar-btn { border-color: #2b4a78; }
+.fusion-toolbar-btn:hover { border-color: #3b82f6; }
+.fusion-modal { max-width: 560px; }
+.fusion-content { max-height: 62vh; overflow-y: auto; }
+.fusion-steps { display: flex; flex-direction: column; gap: .6rem; margin: .8rem 0 1rem; }
+.fusion-step {
+  display: flex; gap: .6rem; align-items: flex-start;
+  padding: .6rem .7rem; border: 1px solid #22304d; border-radius: .6rem;
+  background: #101827;
+}
+.fusion-step-num {
+  flex: 0 0 1.35rem; height: 1.35rem; border-radius: 50%;
+  display: grid; place-items: center; background: #1d4ed8; color: #fff;
+  font-size: .7rem; font-weight: 800;
+}
+.fusion-step b { display: block; font-size: .78rem; color: #e8eefc; margin-bottom: .15rem; }
+.fusion-step p { margin: 0; font-size: .7rem; color: #a8b9d4; line-height: 1.45; }
+.fusion-step code {
+  font-family: var(--font-mono); font-size: .65rem; color: #93c5fd;
+  background: #0b1220; padding: .1rem .3rem; border-radius: .25rem;
+}
+.fusion-actions { display: flex; margin: .5rem 0; }
+.fusion-actions .btn { width: 100%; justify-content: center; }
+.fusion-info { font-size: .65rem; color: #6f81a3; margin: .25rem 0 0; }
+.fusion-note { margin-top: .8rem; padding-top: .7rem; border-top: 1px solid #26334d; }
+.fusion-settings {
+  margin-top: 1rem; padding: .75rem; border: 1px solid #26334d;
+  border-radius: .6rem; background: rgba(15, 23, 42, .55);
+}
+.fusion-settings .form-section-header { margin-bottom: .35rem; }
+.fusion-settings-actions { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .5rem; }
+
+/* ---------------------------------------------------------------- FINE */
+
+/* ---------------------------------------------------------------- FALLIMENTO / MENU / SELEZIONE */
+/* Motivo del fallimento visibile sulle schede */
+.box-fail-reason {
+  margin-top: .4rem;
+  padding: .35rem .5rem;
+  border-left: 3px solid #ef4444;
+  border-radius: .35rem;
+  background: rgba(239,68,68,.1);
+  color: #fecaca;
+  font-size: .7rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.space-fail-reason {
+  margin: .35rem 0 0;
+  padding: .3rem .45rem;
+  border-left: 3px solid #ef4444;
+  border-radius: .3rem;
+  background: rgba(239,68,68,.1);
+  color: #fecaca;
+  font-size: .62rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* I menu a discesa (priorità, colore) non devono essere tagliati dai
+   contenitori del diagramma né finire dietro le schede successive. */
+.level-block, .box-card, .space-card, .phase-block { overflow: visible; }
+.prio-menu, .part-prio-menu, .color-menu { z-index: 500; }
+.space-card.menu-open, .box-card.menu-open { position: relative; z-index: 60; }
+.prio-menu.drop-up, .part-prio-menu.drop-up { top: auto; bottom: calc(100% + .35rem); }
+
+/* Nessuna selezione del testo nel diagramma: le parti non sono testo
+   selezionabile. I campi di input restano modificabili. */
+#diagramContainer, #diagramContainer * { user-select: none; -webkit-user-select: none; }
+#diagramContainer input, #diagramContainer textarea, #diagramContainer select { user-select: text; -webkit-user-select: text; }
+
+/* Linee guida interfaccia (skill web-design-guidelines) */
+html { color-scheme: dark; }
+.modal { overscroll-behavior: contain; }

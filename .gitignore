@@ -1,2 +1,5 @@
 # Local Netlify folder
 .netlify
+
+# Link skill locali (creati da `npx skills`, specifici della macchina)
+.claude/skills/

@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "skills": {
+    "web-design-guidelines": {
+      "source": "vercel/examples",
+      "commit": "a4b4827297bec79b81ddb2ff22a53089ebe88cd8",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/web-design-guidelines/SKILL.md",
+      "computedHash": "34a73f510bacec9a3eaf6d30583862ce71e18998446228b8188450c82ac60dca"
+    }
+  }
+}

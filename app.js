@@ -655,7 +655,9 @@ function adoptLocalState(merged, options) {
   const opts = options || {};
   const previousComparable = syncComparable(appState);
   appState = merged;
+  alignParamNamesAcrossParts(appState);
 
+  persistParamNamesToStorage(appState.tableParamNames);
   if (!Number.isInteger(appState.activePageIndex) || appState.activePageIndex < 0 || appState.activePageIndex >= appState.pages.length) {
     appState.activePageIndex = 0;
   }
@@ -1145,10 +1147,96 @@ const uid = (p='id') => p + '_' + Math.random().toString(36).substring(2,9);
 const escapeHtml = s => !s ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
 const getGlobalNames = () => { if(!appState.tableParamNames||appState.tableParamNames.length<5) appState.tableParamNames=["Parametro A","Parametro B","Parametro C","Parametro D","Parametro E"]; return appState.tableParamNames; };
 const createDefaultTableValues = () => getGlobalNames().map(n=>({name:n,value:''}));
+const DEFAULT_TABLE_PARAM_NAMES = ["Parametro A","Parametro B","Parametro C","Parametro D","Parametro E"];
+const normalizeTableParamNames = names => {
+  const out = [];
+  for (let i = 0; i < 5; i++) {
+    const v = (names && names[i] != null) ? String(names[i]).trim() : '';
+    out.push(v || DEFAULT_TABLE_PARAM_NAMES[i]);
+  }
+  return out;
+};
+const createTableValuesFrom = names => names.map(n => ({ name: n, value: '' }));
+// I nomi dei 5 parametri vengono salvati anche in una chiave dedicata: cosi'
+// restano sempre, anche quando lo stato principale viene riallineato dal cloud.
+const PARAM_NAMES_STORAGE_KEY = 'cascade_table_param_names';
+let paramNameLiveTimer = null;
+function persistParamNamesToStorage(names) {
+  try {
+    localStorage.setItem(PARAM_NAMES_STORAGE_KEY, JSON.stringify(normalizeTableParamNames(names)));
+  } catch (e) {}
+}
+function restoreParamNamesFromStorage() {
+  try {
+    const raw = localStorage.getItem(PARAM_NAMES_STORAGE_KEY);
+    if (!raw) return false;
+    const saved = JSON.parse(raw);
+    if (!Array.isArray(saved) || !saved.length) return false;
+    appState.tableParamNames = normalizeTableParamNames(saved);
+    return true;
+  } catch (e) { return false; }
+}
+// I 5 nomi sono globali: ogni parte, anche quelle create in passato, usa gli
+// stessi nomi nello stesso ordine.
+function alignParamNamesAcrossParts(state) {
+  if (!state || !Array.isArray(state.pages)) return false;
+  const names = normalizeTableParamNames(state.tableParamNames);
+  state.tableParamNames = names;
+  let changed = false;
+  state.pages.forEach(pg => {
+    if (!pg || !Array.isArray(pg.connections)) return;
+    pg.connections.forEach(c => {
+      if (!Array.isArray(c.tableValues)) { c.tableValues = createTableValuesFrom(names); changed = true; return; }
+      for (let i = 0; i < 5; i++) {
+        const tv = c.tableValues[i];
+        if (!tv) { c.tableValues[i] = { name: names[i], value: '' }; changed = true; continue; }
+        if (tv.name !== names[i]) { tv.name = names[i]; changed = true; }
+      }
+      if (c.tableValues.length > 5) { c.tableValues.length = 5; changed = true; }
+    });
+  });
+  return changed;
+}
+// Rinomina un parametro in TUTTE le parti di TUTTE le pagine, subito.
+function renameParamEverywhere(index, rawName, opts) {
+  const options = opts || {};
+  const names = normalizeTableParamNames(appState.tableParamNames);
+  const cleaned = rawName == null ? '' : String(rawName).trim();
+  names[index] = cleaned || DEFAULT_TABLE_PARAM_NAMES[index] || ('Parametro ' + (index + 1));
+  appState.tableParamNames = names;
+  persistParamNamesToStorage(names);
+  let changed = 0;
+  appState.pages.forEach(pg => {
+    if (!pg || !Array.isArray(pg.connections)) return;
+    pg.connections.forEach(c => {
+      if (!Array.isArray(c.tableValues)) c.tableValues = createTableValuesFrom(names);
+      while (c.tableValues.length < 5) c.tableValues.push({ name: names[c.tableValues.length], value: '' });
+      if (c.tableValues[index] && c.tableValues[index].name !== names[index]) {
+        c.tableValues[index].name = names[index];
+        changed++;
+      }
+    });
+  });
+  if (!options.keepInputs) {
+    const settingInputs = document.querySelectorAll('#settingsParamInputs input');
+    if (settingInputs[index] && settingInputs[index].value !== names[index]) settingInputs[index].value = names[index];
+    const partRows = document.querySelectorAll('#tableInputs .table-input-row');
+    if (partRows[index]) {
+      const input = partRows[index].querySelector('input');
+      if (input && input.value !== names[index]) input.value = names[index];
+    }
+  }
+  if (!options.quiet) {
+    saveAppState();
+    if (options.render !== false) renderDiagram();
+  }
+  return changed;
+}
 const getCurrentPage = () => appState.pages[appState.activePageIndex] || appState.pages[0];
 const buildBoxIndex = pg => { const map=new Map(); if(!pg || !Array.isArray(pg.phases)) return map; pg.phases.forEach((ph,pi)=>(ph.levels||[]).forEach((lv,li)=>(lv.boxes||[]).forEach(b=>map.set(b.id,{box:b,phase:ph,phaseIdx:pi,level:lv,levelIdx:li})))); return map; };
 const partScore = c => c.failed ? 0 : (Number(c.score)||0);
 const saveAppState = () => {
+  try { persistParamNamesToStorage(appState && appState.tableParamNames); } catch (e) {}
   const currentPage = (appState && Array.isArray(appState.pages) && appState.pages[appState.activePageIndex]) || null;
   if (currentPage) enforcePriorityConstraints(currentPage);
   lastLocalChangeAt = Date.now();
@@ -1164,11 +1252,13 @@ const showToast = (msg,type='info') => { const t=document.getElementById('toast'
 function initAppState(){
   const saved = localStorage.getItem('cascade_diagram_app');
   if(saved){
-    try{ appState=JSON.parse(saved); if(!Array.isArray(appState.pages)||!appState.pages.length) throw new Error('stato locale non valido'); if(appState.activePageIndex>=appState.pages.length) appState.activePageIndex=0; localDocWasBlank=false; prepareLocalStateAfterLoad(); renderTabs(); renderDiagram(); return; }
+    try{ appState=JSON.parse(saved); if(!Array.isArray(appState.pages)||!appState.pages.length) throw new Error('stato locale non valido'); if(appState.activePageIndex>=appState.pages.length) appState.activePageIndex=0; restoreParamNamesFromStorage(); alignParamNamesAcrossParts(appState); localDocWasBlank=false; prepareLocalStateAfterLoad(); renderTabs(); renderDiagram(); return; }
     catch(e){ console.error(e); }
   }
   localDocWasBlank = true;
   appState = { activePageIndex:0, pages:[ createDefaultPage('Diagramma Principale') ] };
+  restoreParamNamesFromStorage();
+  alignParamNamesAcrossParts(appState);
   prepareLocalStateAfterLoad();
   // Se c'è Supabase, non scrivere subito il default su localStorage: connectCloud adottera'
   // lo stato remoto (se esiste) o scrivera' il locale sul cloud. Scriviamo default solo
@@ -1649,16 +1739,117 @@ function togglePhaseStatus(pid){ const pg=getCurrentPage(); const ph=pg.phases.f
 function toggleColorMenu(pid){ document.getElementById('color-menu-'+pid)?.classList.toggle('hidden'); }
 function toggleSpaceTable(btn,id){ const el=document.getElementById(id); if(!el||!btn) return; const nowHidden=el.classList.toggle('hidden'); btn.textContent=nowHidden?'Mostra altro':'Nascondi'; btn.classList.toggle('expanded',!nowHidden); }
 
+// ===== MOTIVO FALLIMENTO =====
+// Quando una modifica o una parte viene segnata come fallita si apre uno
+// spazio dedicato per spiegarne il motivo. Il motivo resta salvato con la
+// modifica/parte e viene mostrato sulla scheda del diagramma.
+let failReasonTarget = null;
+
+function findFailEntity(kind, id) {
+  const pg = getCurrentPage();
+  if (!pg) return null;
+  if (kind === 'box') {
+    for (const ph of pg.phases || []) for (const lv of ph.levels || []) {
+      const b = (lv.boxes || []).find(x => x.id === id);
+      if (b) return b;
+    }
+    return null;
+  }
+  return (pg.connections || []).find(c => c.id === id) || null;
+}
+
+function openFailReasonModal(kind, id) {
+  const ent = findFailEntity(kind, id);
+  if (!ent) return;
+  failReasonTarget = { kind, id };
+  const ctx = document.getElementById('failReasonContext');
+  if (ctx) {
+    ctx.textContent = kind === 'box'
+      ? 'Modifica fallita: ' + (ent.title || 'senza titolo')
+      : 'Parte fallita: ' + (ent.file || 'script.py') + ' → ' + findBoxTitle(ent.targetBoxId);
+  }
+  const txt = document.getElementById('failReasonText');
+  if (txt) txt.value = ent.failReason || '';
+  const m = document.getElementById('failReasonModal');
+  if (!m) return;
+  m.classList.remove('hidden');
+  m.classList.add('open');
+  if (txt) setTimeout(() => { try { txt.focus(); } catch (e) {} }, 80);
+}
+
+function closeFailReasonModal() {
+  const m = document.getElementById('failReasonModal');
+  if (!m) return;
+  m.classList.remove('open');
+  setTimeout(() => m.classList.add('hidden'), 200);
+}
+
+function cancelFailReason() {
+  failReasonTarget = null;
+  closeFailReasonModal();
+}
+
+function toggleFailReasonField(groupId, show) {
+  const el = document.getElementById(groupId);
+  if (el) el.classList.toggle('hidden', !show);
+}
+
+// Le parti della modifica fallita ereditano il motivo, se non ne hanno uno.
+function propagateFailReasonToParts(pg, boxId, reason) {
+  if (!pg || !reason) return;
+  (pg.connections || []).forEach(c => {
+    if (c.targetBoxId === boxId && c.failed && !c.failReason) c.failReason = reason;
+  });
+}
+
+function saveFailReason(e) {
+  e.preventDefault();
+  const target = failReasonTarget;
+  failReasonTarget = null;
+  if (target) {
+    const ent = findFailEntity(target.kind, target.id);
+    const txt = document.getElementById('failReasonText');
+    if (ent && txt) {
+      ent.failReason = txt.value.trim();
+      if (target.kind === 'box') propagateFailReasonToParts(getCurrentPage(), target.id, ent.failReason);
+    }
+    saveAppState();
+    renderDiagram();
+  }
+  closeFailReasonModal();
+}
+
 // ===== BOX DETAIL MODAL =====
-function openBoxTitleModal(bid){ const pg=getCurrentPage(); let box=null; for(const ph of pg.phases) for(const lv of ph.levels){ const b=lv.boxes.find(x=>x.id===bid); if(b){ box=b; break } } if(!box) return; document.getElementById('editBoxId').value=bid; document.getElementById('editBoxTitle').value=box.title||''; document.getElementById('editBoxDesc').value=box.description||''; document.getElementById('editBoxPriority').value=box.priority||'p1'; 
+function openBoxTitleModal(bid){ const pg=getCurrentPage(); let box=null; for(const ph of pg.phases) for(const lv of ph.levels){ const b=lv.boxes.find(x=>x.id===bid); if(b){ box=b; break } } if(!box) return; document.getElementById('editBoxId').value=bid; document.getElementById('editBoxTitle').value=box.title||''; document.getElementById('editBoxDesc').value=box.description||''; document.getElementById('editBoxPriority').value=box.priority||'p1'; document.getElementById('editBoxFailReason').value=box.failReason||''; toggleFailReasonField('editBoxFailReasonGroup',(box.priority||'p1')==='failed');
   const m=document.getElementById('boxModal'); m.classList.remove('hidden'); m.classList.add('open'); }
 function closeBoxModal(){ const m=document.getElementById('boxModal'); m.classList.remove('open'); setTimeout(()=>{ m.classList.add('hidden'); }, 200); }
-function saveBoxTitle(e){ e.preventDefault(); const pg=getCurrentPage(); const bid=document.getElementById('editBoxId').value; const nt=document.getElementById('editBoxTitle').value; const nd=document.getElementById('editBoxDesc').value; const np=document.getElementById('editBoxPriority').value; let box=null, before='p1'; for(const ph of pg.phases) for(const lv of ph.levels){ const b=lv.boxes.find(x=>x.id===bid); if(b){ before=b.priority||'p1'; b.title=nt; b.description=nd; b.priority=np; box=b; break } } if(box && before!==np) applyPriorityCascade(pg, box); closeBoxModal(); saveAppState(); renderDiagram(); }
+function saveBoxTitle(e){ e.preventDefault(); const pg=getCurrentPage(); const bid=document.getElementById('editBoxId').value; const nt=document.getElementById('editBoxTitle').value; const nd=document.getElementById('editBoxDesc').value; const np=document.getElementById('editBoxPriority').value; const reasonEl=document.getElementById('editBoxFailReason'); const nfr=reasonEl?reasonEl.value.trim():''; let box=null, before='p1'; for(const ph of pg.phases) for(const lv of ph.levels){ const b=lv.boxes.find(x=>x.id===bid); if(b){ before=b.priority||'p1'; b.title=nt; b.description=nd; b.priority=np; b.failReason=nfr; box=b; break } } if(box && before!==np) applyPriorityCascade(pg, box); closeBoxModal(); saveAppState(); renderDiagram(); if(box && np==='failed' && before!=='failed'){ propagateFailReasonToParts(pg, box.id, box.failReason); setTimeout(()=>openFailReasonModal('box', box.id), 240); } }
 
 // ===== SPACE MODAL =====
-function openSpaceModal(cid){ const pg=getCurrentPage(); const c=pg.connections.find(x=>x.id===cid); if(!c) return; document.getElementById('spaceConnId').value=cid; document.getElementById('spaceFailed').checked=!!c.failed; document.getElementById('spaceFile').value=c.file||''; document.getElementById('spaceScore').value=c.score??0; document.getElementById('spaceNotes').value=c.notes||''; document.getElementById('spaceModalSrc').textContent=findBoxTitle(c.srcBoxId); document.getElementById('spaceModalTarget').textContent=findBoxTitle(c.targetBoxId); if(!c.tableValues||c.tableValues.length<5) c.tableValues=createDefaultTableValues(); const cont=document.getElementById('tableInputs'); cont.innerHTML=''; c.tableValues.forEach((tv,i)=>{ cont.innerHTML+=`<div class="table-input-row"><input type="text" value="${escapeHtml(tv.name)}" placeholder="Nome ${i+1}" onchange="updateTableField('${cid}',${i},'name',this.value)" class="input"><input type="text" value="${escapeHtml(tv.value)}" placeholder="Valore ${i+1}" onchange="updateTableField('${cid}',${i},'value',this.value)" class="input"></div>`; }); const m=document.getElementById('spaceModal'); m.classList.remove('hidden'); m.classList.add('open'); }
+function openSpaceModal(cid){ const pg=getCurrentPage(); const c=pg.connections.find(x=>x.id===cid); if(!c) return; document.getElementById('spaceConnId').value=cid; document.getElementById('spaceFailed').checked=!!c.failed; document.getElementById('spaceFile').value=c.file||''; document.getElementById('spaceScore').value=c.score??0; document.getElementById('spaceNotes').value=c.notes||''; document.getElementById('spaceFailReason').value=c.failReason||''; toggleFailReasonField('spaceFailReasonGroup',!!c.failed); document.getElementById('spaceModalSrc').textContent=findBoxTitle(c.srcBoxId); document.getElementById('spaceModalTarget').textContent=findBoxTitle(c.targetBoxId); if(!c.tableValues||c.tableValues.length<5) c.tableValues=createDefaultTableValues();
+  // I nomi sono globali: mostra sempre quelli correnti, anche per le parti
+  // create prima di una rinomina.
+  const globalNames=getGlobalNames();
+  const alignedValues=[];
+  for(let i=0;i<5;i++){ const tv=c.tableValues[i]; alignedValues.push({name:globalNames[i],value:tv?tv.value:''}); }
+  c.tableValues=alignedValues;
+  const cont=document.getElementById('tableInputs'); cont.innerHTML=''; c.tableValues.forEach((tv,i)=>{ cont.innerHTML+=`<div class="table-input-row"><input type="text" value="${escapeHtml(tv.name)}" placeholder="Nome ${i+1}" onchange="updateTableField('${cid}',${i},'name',this.value)" class="input"><input type="text" value="${escapeHtml(tv.value)}" placeholder="Valore ${i+1}" onchange="updateTableField('${cid}',${i},'value',this.value)" class="input"></div>`; }); const m=document.getElementById('spaceModal'); m.classList.remove('hidden'); m.classList.add('open'); }
 function closeSpaceModal(){ const m=document.getElementById('spaceModal'); m.classList.remove('open'); setTimeout(()=>{ m.classList.add('hidden'); }, 200); }
-function updateTableField(cid,i,field,val){ const c=getCurrentPage().connections.find(x=>x.id===cid); if(c&&c.tableValues[i]) c.tableValues[i][field]=val; }
+function updateTableField(cid,i,field,val){
+  const c=getCurrentPage().connections.find(x=>x.id===cid);
+  if(!c||!c.tableValues[i]) return;
+  if(field==='name'){
+    // Il nome del parametro e' globale: rinominalo subito in tutte le parti.
+    renameParamEverywhere(i,val);
+    const rows=document.querySelectorAll('#tableInputs .table-input-row');
+    if(rows[i]){
+      const input=rows[i].querySelector('input');
+      if(input) input.value=appState.tableParamNames[i];
+    }
+    return;
+  }
+  c.tableValues[i][field]=val;
+}
 function updateTableFieldDirect(cid,i,field,val){ const c=getCurrentPage().connections.find(x=>x.id===cid); if(c&&c.tableValues[i]){ c.tableValues[i][field]=val; saveAppState(); } }
 function saveSpaceForm(e){
   e.preventDefault();
@@ -1667,16 +1858,44 @@ function saveSpaceForm(e){
   const c=pg.connections.find(x=>x.id===cid);
   if(!c) return;
   const wasFailed=!!c.failed;
+  const spaceReasonEl=document.getElementById('spaceFailReason');
+  if(spaceReasonEl) c.failReason=spaceReasonEl.value.trim();
   c.failed=document.getElementById('spaceFailed').checked;
   c.score=parseFloat(document.getElementById('spaceScore').value)||0;
   c.notes=document.getElementById('spaceNotes').value;
   if(wasFailed!==!!c.failed) applySpaceFailureCascade(pg, c);
   closeSpaceModal(); saveAppState(); renderDiagram();
+  if(!wasFailed && c.failed){ propagateFailReasonToParts(pg, c.targetBoxId, c.failReason); setTimeout(()=>openFailReasonModal('part', c.id), 240); }
 }
 function toggleConnectionState(cid){ const c=getCurrentPage().connections.find(x=>x.id===cid); if(c){ c.disconnected=!c.disconnected; saveAppState(); renderDiagram(); } }
-function cycleBoxPriority(bid){ const pg=getCurrentPage(); for(const ph of pg.phases) for(const lv of ph.levels){ const b=lv.boxes.find(x=>x.id===bid); if(b){ const ord=['p1','p2','p3','p4','failed']; let i=ord.indexOf(b.priority||'p1'); i=(i+1)%5; b.priority=ord[i]; saveAppState(); renderDiagram(); return; } } }
-function toggleConnFailed(cid){ const pg=getCurrentPage(); const c=pg.connections.find(x=>x.id===cid); if(c){ c.failed=!c.failed; saveAppState(); const el=document.getElementById('space-'+cid); if(el){ el.classList.add('failed-part'); setTimeout(()=>el.classList.remove('failed-part'),600); } renderDiagram(); } }
-function togglePriorityMenu(bid, ev){ ev.stopPropagation(); document.querySelectorAll('.prio-menu').forEach(m=>m.classList.remove('open')); const btn=ev.currentTarget; const menu=btn.nextElementSibling; if(menu&&menu.classList.contains('prio-menu')) menu.classList.toggle('open'); }
+function cycleBoxPriority(bid){ const pg=getCurrentPage(); for(const ph of pg.phases) for(const lv of ph.levels){ const b=lv.boxes.find(x=>x.id===bid); if(b){ const ord=['p1','p2','p3','p4','failed']; let i=ord.indexOf(b.priority||'p1'); i=(i+1)%5; b.priority=ord[i]; saveAppState(); renderDiagram(); if(ord[i]==='failed') setTimeout(()=>openFailReasonModal('box', bid), 120); return; } } }
+function toggleConnFailed(cid){ const pg=getCurrentPage(); const c=pg.connections.find(x=>x.id===cid); if(c){ c.failed=!c.failed; const nowFailed=!!c.failed; saveAppState(); const el=document.getElementById('space-'+cid); if(el){ el.classList.add('failed-part'); setTimeout(()=>el.classList.remove('failed-part'),600); } renderDiagram(); if(nowFailed) setTimeout(()=>openFailReasonModal('part', cid), 120); } }
+function positionPriorityMenu(btn, menu){
+  menu.classList.remove('drop-up');
+  const r=btn.getBoundingClientRect();
+  const h=menu.offsetHeight||150;
+  if(r.bottom+h+16>window.innerHeight && r.top-h-16>0) menu.classList.add('drop-up');
+}
+function closeAllPriorityMenus(){
+  document.querySelectorAll('.prio-menu').forEach(m=>m.classList.remove('open','drop-up'));
+  document.querySelectorAll('.menu-open').forEach(el=>el.classList.remove('menu-open'));
+}
+function togglePriorityMenu(bid, ev){
+  ev.stopPropagation();
+  const btn=ev.currentTarget;
+  const menu=btn.nextElementSibling;
+  const wasOpen=!!(menu && menu.classList.contains('open'));
+  closeAllPriorityMenus();
+  if(!menu || wasOpen) return;
+  menu.classList.add('open');
+  const card=btn.closest('.box-card, .space-card');
+  if(card) card.classList.add('menu-open');
+  positionPriorityMenu(btn, menu);
+}
+document.addEventListener('click', (ev)=>{
+  if(ev.target.closest('.prio-menu') || ev.target.closest('.prio-btn') || ev.target.closest('.prio-btn-small')) return;
+  closeAllPriorityMenus();
+});
 function setBoxPriority(bid,p){
   const pg=getCurrentPage();
   for(const ph of pg.phases) for(const lv of ph.levels){
@@ -1684,6 +1903,7 @@ function setBoxPriority(bid,p){
     if(b){
       b.priority=p;
       if(p==='failed'){
+        setTimeout(()=>openFailReasonModal('box', bid), 120);
         pg.connections.forEach(c=>{
           if((c.srcBoxId===bid||c.targetBoxId===bid) && !c.failed){
             c.failed=true; c.priority='failed';
@@ -1694,7 +1914,7 @@ function setBoxPriority(bid,p){
       pruneAndRebuild(pg);
       saveAppState();
       renderDiagram();
-      document.querySelectorAll('.prio-menu').forEach(m=>m.classList.remove('open'));
+      closeAllPriorityMenus();
       return;
     }
   }
@@ -1704,7 +1924,7 @@ function setPartPriority(cid,p){
   const c=pg.connections.find(x=>x.id===cid);
   if(c){
     const wasFailed=c.failed;
-    if(p==='failed'){ c.failed=true; c.priority='failed'; }
+    if(p==='failed'){ c.failed=true; c.priority='failed'; setTimeout(()=>openFailReasonModal('part', cid), 120); }
     else { c.failed=false; c.priority=p; }
     // CASCATA: una parte che resta senza una strada che arriva da sinistra
     // (perche' la parte a monte e' fallita) non deve esistere.
@@ -1714,14 +1934,18 @@ function setPartPriority(cid,p){
     if(el && p==='failed' && !wasFailed){ el.classList.add('failed-part'); setTimeout(()=>el.classList.remove('failed-part'),600); }
     renderDiagram();
   }
-  document.querySelectorAll('.prio-menu').forEach(m=>m.classList.remove('open'));
+  closeAllPriorityMenus();
 }
-function togglePartPriorityMenu(cid, ev){
+function togglePartPriorityMenu(cid, ev){ var wasOpen=!!(ev.currentTarget.nextElementSibling && ev.currentTarget.nextElementSibling.classList.contains('open'));
   ev.stopPropagation();
-  document.querySelectorAll('.prio-menu').forEach(m=>m.classList.remove('open'));
+  closeAllPriorityMenus();
   const btn=ev.currentTarget;
   const menu=btn.nextElementSibling;
-  if(menu&&menu.classList.contains('prio-menu')) menu.classList.toggle('open');
+  if(!menu || wasOpen) return;
+  menu.classList.add('open');
+  const card=btn.closest('.box-card, .space-card');
+  if(card) card.classList.add('menu-open');
+  positionPriorityMenu(btn, menu);
 }
 
 // ===== MANAGE CONNECTIONS MODAL =====
@@ -1821,17 +2045,109 @@ function toggleConnectionFromManager(sid,tid){
 }
 
 // ===== SETTINGS MODAL =====
-function openSettingsModal(){ const cont=document.getElementById('settingsParamInputs'); cont.innerHTML=''; getGlobalNames().forEach((n,i)=>{ cont.innerHTML+=`<div class="table-input-row"><span style="display:flex;align-items:center;width:2rem;font-size:.65rem;color:var(--muted);justify-content:flex-end">${i+1}.</span><input type="text" value="${escapeHtml(n)}" onchange="updateGlobalParamName(${i},this.value)" class="input" style="flex:1"></div>`; }); const modal=document.getElementById('settingsModal'); modal.classList.remove('hidden'); modal.classList.add('open'); }
+function openSettingsModal(){ const cont=document.getElementById('settingsParamInputs'); cont.innerHTML=''; getGlobalNames().forEach((n,i)=>{ cont.innerHTML+=`<div class="table-input-row"><span style="display:flex;align-items:center;width:2rem;font-size:.65rem;color:var(--muted);justify-content:flex-end">${i+1}.</span><input type="text" value="${escapeHtml(n)}" oninput="updateGlobalParamNameLive(${i},this.value)" onchange="updateGlobalParamName(${i},this.value)" class="input" style="flex:1"></div>`; }); const modal=document.getElementById('settingsModal'); modal.classList.remove('hidden'); modal.classList.add('open'); }
 function closeSettingsModal(){ const modal=document.getElementById('settingsModal'); modal.classList.remove('open'); setTimeout(()=>{ modal.classList.add('hidden'); }, 200); }
-function updateGlobalParamName(i,v){ if(!appState.tableParamNames) appState.tableParamNames=[]; appState.tableParamNames[i]=v||'Parametro '+String.fromCharCode(65+i); }
-function saveSettings(e){ e.preventDefault(); while(appState.tableParamNames.length<5) appState.tableParamNames.push('Parametro '+String.fromCharCode(65+appState.tableParamNames.length)); appState.tableParamNames=appState.tableParamNames.slice(0,5); saveAppState(); closeSettingsModal(); showToast('Impostazioni salvate!','success'); }
-function resetSettingsToDefault(){ appState.tableParamNames=['Parametro A','Parametro B','Parametro C','Parametro D','Parametro E']; const c=document.getElementById('settingsParamInputs'); c.innerHTML=''; appState.tableParamNames.forEach((n,i)=>{ c.innerHTML+=`<div class="table-input-row"><span style="display:flex;align-items:center;width:2rem;font-size:.65rem;color:var(--muted);justify-content:flex-end">${i+1}.</span><input type="text" value="${escapeHtml(n)}" onchange="updateGlobalParamName(${i},this.value)" class="input" style="flex:1"></div>`; }); }
+function updateGlobalParamName(i,v){ renameParamEverywhere(i,v); }
+// Anteprima mentre si scrive: aggiorna subito tutti i nomi in memoria,
+// il salvataggio avviene al blur/conferma.
+function updateGlobalParamNameLive(i,v){
+  // Mentre si scrive si conserva il testo esatto (spazi compresi): i nomi
+  // vengono aggiornati subito in tutte le parti e salvati poco dopo.
+  const names=normalizeTableParamNames(appState.tableParamNames).slice();
+  names[i]=v==null?'':String(v);
+  appState.tableParamNames=names;
+  appState.pages.forEach(pg=>{
+    if(!pg||!Array.isArray(pg.connections)) return;
+    pg.connections.forEach(c=>{
+      if(!Array.isArray(c.tableValues)) c.tableValues=createTableValuesFrom(names);
+      while(c.tableValues.length<5) c.tableValues.push({name:names[c.tableValues.length],value:''});
+      if(c.tableValues[i]) c.tableValues[i].name=names[i];
+    });
+  });
+  if(paramNameLiveTimer) clearTimeout(paramNameLiveTimer);
+  paramNameLiveTimer=setTimeout(()=>{
+    paramNameLiveTimer=null;
+    try{ persistParamNamesToStorage(appState.tableParamNames); saveAppState(); }catch(e){}
+  },350);
+}
+function saveSettings(e){ e.preventDefault(); alignParamNamesAcrossParts(appState); saveAppState(); closeSettingsModal(); renderDiagram(); showToast('Impostazioni salvate: nomi aggiornati in tutte le parti','success'); }
+function resetSettingsToDefault(){
+  DEFAULT_TABLE_PARAM_NAMES.forEach((name,i)=>renameParamEverywhere(i,name,{quiet:true,render:false}));
+  const c=document.getElementById('settingsParamInputs');
+  if(c){
+    c.innerHTML='';
+    appState.tableParamNames.forEach((n,i)=>{
+      c.innerHTML+=`<div class="table-input-row"><span style="display:flex;align-items:center;width:2rem;font-size:.65rem;color:var(--muted);justify-content:flex-end">${i+1}.</span><input type="text" value="${escapeHtml(n)}" oninput="updateGlobalParamNameLive(${i},this.value)" onchange="updateGlobalParamName(${i},this.value)" class="input" style="flex:1"></div>`;
+    });
+  }
+  saveAppState();
+  renderDiagram();
+  showToast('Nomi parametri ripristinati in tutte le parti','info');
+}
+
+// ===== FUSION 360 BRIDGE =====
+// Un solo file contiene diagramma e coordinate del cloud: l'add-in
+// Cascade Bridge lo apre e puo' leggere/scrivere direttamente il documento.
+function openFusionModal(){
+  const m=document.getElementById('fusionModal');
+  if(!m) return;
+  const info=document.getElementById('fusionBridgeInfo');
+  if(info){
+    const parts=appState.pages.reduce((n,pg)=>n+((pg.connections||[]).filter(c=>!c.disconnected).length),0);
+    info.textContent=appState.pages.length+' pagine · '+parts+' parti · 5 parametri globali';
+  }
+  m.classList.remove('hidden'); m.classList.add('open');
+}
+function closeFusionModal(){
+  const m=document.getElementById('fusionModal');
+  if(!m) return;
+  m.classList.remove('open');
+  setTimeout(()=>m.classList.add('hidden'),200);
+}
+function exportFusionBridge(){
+  const aligned=alignParamNamesAcrossParts(appState);
+  if(aligned) saveAppState();
+  const builtIn=getBuiltInSupabaseConfig();
+  const storedUrl=(localStorage.getItem('supabase_url')||'').trim().replace(/\/+$/,'');
+  const storedKey=(localStorage.getItem('supabase_key')||'').trim();
+  const cfg=(builtIn.url&&builtIn.key)?builtIn:{url:builtIn.url||storedUrl,key:builtIn.key||storedKey};
+  const payload={
+    format:'cascade-fusion-bridge',
+    version:1,
+    app:'Diagramma Cascata',
+    exportedAt:new Date().toISOString(),
+    diagramId:CLOUD_DIAGRAM_ID,
+    supabase:{url:cfg.url||'',anonKey:cfg.key||''},
+    state:diagramForExport(appState)
+  };
+  const data=JSON.stringify(payload,null,2);
+  const a=document.createElement('a');
+  a.href='data:application/json;charset=utf-8,'+encodeURIComponent(data);
+  a.download='cascade_fusion_bridge.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  showToast('Ponte Fusion 360 scaricato','success');
+}
 
 // ===== FILE SYSTEM ACCESS API =====
-async function saveFile(){ const data=JSON.stringify(diagramForExport(appState),null,2); try{ if(!fileHandle){ fileHandle=await window.showSaveFilePicker({suggestedName:'diagramma_cascata_'+new Date().toISOString().slice(0,10)+'.json',types:[{description:'Diagramma Cascata JSON',accept:{'application/json':['.json']}}]}); } const w=await fileHandle.createWritable(); await w.write(data); await w.close(); saveAppState(); showToast('Salvato su file!','success'); } catch(err){ if(err.name!=='AbortError'){ console.error(err); fallbackDownload(data); } } }
+async function saveFile(){ alignParamNamesAcrossParts(appState); const data=JSON.stringify(diagramForExport(appState),null,2); try{ if(!fileHandle){ fileHandle=await window.showSaveFilePicker({suggestedName:'diagramma_cascata_'+new Date().toISOString().slice(0,10)+'.json',types:[{description:'Diagramma Cascata JSON',accept:{'application/json':['.json']}}]}); } const w=await fileHandle.createWritable(); await w.write(data); await w.close(); saveAppState(); showToast('Salvato su file!','success'); } catch(err){ if(err.name!=='AbortError'){ console.error(err); fallbackDownload(data); } } }
 function fallbackDownload(data){ const a=document.createElement('a'); a.href='data:text/json;charset=utf-8,'+encodeURIComponent(data); a.download='diagramma_cascata_'+new Date().toISOString().slice(0,10)+'.json'; document.body.appendChild(a); a.click(); a.remove(); }
 async function loadFile(ev){ if(ev&&ev.target&&ev.target.files){ const f=ev.target.files[0]; if(!f) return; tryLoad(await f.text()); return } try{ const [h]=await window.showOpenFilePicker({types:[{description:'Diagramma Cascata JSON',accept:{'application/json':['.json']}}]}); fileHandle=h; tryLoad(await (await h.getFile()).text()); } catch(err){ if(err.name!=='AbortError') alert('Errore caricamento. Usa pulsante Carica classico.'); } }
-function tryLoad(txt){ try{ const imp=JSON.parse(txt); if(imp&&Array.isArray(imp.pages)){ appState=imp; saveAppState(); renderTabs(); renderDiagram(); showToast('Diagramma caricato!','success'); } else alert('JSON non valido'); } catch(err){ alert('Errore: '+err.message); } }
+function tryLoad(txt){
+  try{
+    let imp=JSON.parse(txt);
+    if(imp && imp.format==='cascade-fusion-bridge' && imp.state) imp=imp.state;
+    if(imp&&Array.isArray(imp.pages)){
+      appState=imp;
+      alignParamNamesAcrossParts(appState);
+      saveAppState();
+      renderTabs();
+      renderDiagram();
+      showToast('Diagramma caricato!','success');
+    } else alert('JSON non valido');
+  } catch(err){ alert('Errore: '+err.message); }
+}
 function clearAll(){ if(confirm('Reset pagina corrente?')){ appState.pages[appState.activePageIndex]=createDefaultPage(getCurrentPage().name); saveAppState(); renderDiagram(); } }
 
 // ===== SEARCH =====
@@ -1927,7 +2243,7 @@ function openReorderModal(pid,lid){
   const ph=pg.phases.find(p=>p.id===pid);
   const lv=ph && ph.levels.find(l=>l.id===lid);
   if(!lv) return;
-  document.querySelectorAll('.prio-menu').forEach(m=>m.classList.remove('open'));
+  closeAllPriorityMenus();
   reorderState={
     pid,lid,
     normal:lv.boxes.filter(b=>(b.priority||'p1')!=='failed'),
@@ -2125,15 +2441,16 @@ function renderDiagram(){
               }
               tpv+='</div>';
             }
-            spHTML+=`<div id="space-${cn.id}" data-conn-id="${cn.id}" data-space-index="${si}" onmouseenter="hoverConn('${cn.id}')" onmouseleave="leaveConn()" onclick="event.stopPropagation();openSpaceModal('${cn.id}')" class="space-card ${pb} space-card-modern${activeHoverPath.includes(cn.id)?' space-active':''}" style="opacity:${sopacity}"><span class="space-number" style="background:${pbc}">${si+1}</span><div id="dot-in-${cn.id}" class="connector-dot connector-in" title="Ingresso"></div><div id="dot-out-${cn.id}" class="connector-dot connector-out" title="Uscita"></div><div class="space-header"><div class="space-file"><span class="truncate" title="${escapeHtml(cn.file)}">${escapeHtml(cn.file||'script.py')}</span></div><div class="part-prio-wrap"><button class="prio-btn-small prio-${cn.failed?'failed':(cn.priority||'p1')}" onclick="event.stopPropagation();togglePartPriorityMenu('${cn.id}',event)" title="Priorità parte${allowedRank>1?' (max '+prioLabel(allowedRank)+')':''}">${cn.failed?'FAIL':(cn.priority||'p1').toUpperCase()}</button><div class="prio-menu part-prio-menu">${partPriorityMenuMarkup(cn.id,allowedRank)}</div></div></div><div class="space-source"><span>Da: <b>${escapeHtml(titleOf(cn.srcBoxId))}</b></span><span class="space-score" title="Punteggio">${cn.failed?0:(Number(cn.score)||0)} pt</span></div>${cn.notes?`<p class="space-notes">"${escapeHtml(cn.notes)}"</p>`:''}${tpv}</div>`;
+            spHTML+=`<div id="space-${cn.id}" data-conn-id="${cn.id}" data-space-index="${si}" onmouseenter="hoverConn('${cn.id}')" onmouseleave="leaveConn()" onclick="event.stopPropagation();openSpaceModal('${cn.id}')" class="space-card ${pb} space-card-modern${activeHoverPath.includes(cn.id)?' space-active':''}" style="opacity:${sopacity}"><span class="space-number" style="background:${pbc}">${si+1}</span><div id="dot-in-${cn.id}" class="connector-dot connector-in" title="Ingresso"></div><div id="dot-out-${cn.id}" class="connector-dot connector-out" title="Uscita"></div><div class="space-header"><div class="space-file"><span class="truncate" title="${escapeHtml(cn.file)}">${escapeHtml(cn.file||'script.py')}</span></div><div class="part-prio-wrap"><button class="prio-btn-small prio-${cn.failed?'failed':(cn.priority||'p1')}" onclick="event.stopPropagation();togglePartPriorityMenu('${cn.id}',event)" title="Priorità parte${allowedRank>1?' (max '+prioLabel(allowedRank)+')':''}">${cn.failed?'FAIL':(cn.priority||'p1').toUpperCase()}</button><div class="prio-menu part-prio-menu">${partPriorityMenuMarkup(cn.id,allowedRank)}</div></div></div><div class="space-source"><span>Da: <b>${escapeHtml(titleOf(cn.srcBoxId))}</b></span><span class="space-score" title="Punteggio">${cn.failed?0:(Number(cn.score)||0)} pt</span></div>${cn.notes?`<p class="space-notes">"${escapeHtml(cn.notes)}"</p>`:''}${cn.failed&&cn.failReason?`<p class="space-fail-reason"><b>Motivo:</b> ${escapeHtml(cn.failReason)}</p>`:''}${tpv}</div>`;
           });
         }
         const iz=pi===0;
         const hb=iz?'':`<div class="box-actions"><button class="icon-btn" onclick="event.stopPropagation();openReorderModal('${ph.id}','${lv.id}')" title="Riordina modifiche nella zona"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="18" x2="16" y2="18"/></svg></button><button class="icon-btn" onclick="event.stopPropagation();openManageConnModal('${bx.id}')" title="Gestisci collegamenti"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></button><button class="icon-btn icon-btn-danger" onclick="event.stopPropagation();deleteBox('${bx.id}')" title="Elimina modifica"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg></button></div>`;
         const dh=bx.description?`<div class="box-desc">${escapeHtml(bx.description)}</div>`:'';
+        const fr=(bx.priority==='failed'&&bx.failReason)?`<div class="box-fail-reason"><b>Motivo:</b> ${escapeHtml(bx.failReason)}</div>`:'';
         // Parti visibili su tutte le fasi; azioni di modifica su tutte tranne la Fase 0
         const ss=iz ? '' : `<div class="spaces-section"><div class="spaces-header">Parti (${act.length})</div><div class="spaces-grid">${spHTML}</div></div>`;
-        const boxDiv=document.createElement('div'); boxDiv.className='box-card box-prio-'+bp; boxDiv.id='card-'+bx.id; boxDiv.dataset.boxId=bx.id; boxDiv.style.borderColor=bc; boxDiv.innerHTML=`<div class="box-header"><div class="box-title-row" onclick="openBoxTitleModal('${bx.id}')"><span class="box-title">${escapeHtml(bx.title)}</span><div class="box-prio-wrap"><button class="prio-btn prio-${bp}" onclick="event.stopPropagation();togglePriorityMenu('${bx.id}',event)" title="Priorità">${bp==='failed'?'FAIL':bp.toUpperCase()}</button><div class="prio-menu"><button class="prio-opt" onclick="event.stopPropagation();setBoxPriority('${bx.id}','p1')">P1</button><button class="prio-opt" onclick="event.stopPropagation();setBoxPriority('${bx.id}','p2')">P2</button><button class="prio-opt" onclick="event.stopPropagation();setBoxPriority('${bx.id}','p3')">P3</button><button class="prio-opt" onclick="event.stopPropagation();setBoxPriority('${bx.id}','p4')">P4</button><button class="prio-opt" onclick="event.stopPropagation();setBoxPriority('${bx.id}','failed')">FAIL</button></div></div></div>${hb}</div>${dh}${ss}`;
+        const boxDiv=document.createElement('div'); boxDiv.className='box-card box-prio-'+bp; boxDiv.id='card-'+bx.id; boxDiv.dataset.boxId=bx.id; boxDiv.style.borderColor=bc; boxDiv.innerHTML=`<div class="box-header"><div class="box-title-row" onclick="openBoxTitleModal('${bx.id}')"><span class="box-title">${escapeHtml(bx.title)}</span><div class="box-prio-wrap"><button class="prio-btn prio-${bp}" onclick="event.stopPropagation();togglePriorityMenu('${bx.id}',event)" title="Priorità">${bp==='failed'?'FAIL':bp.toUpperCase()}</button><div class="prio-menu"><button class="prio-opt" onclick="event.stopPropagation();setBoxPriority('${bx.id}','p1')">P1</button><button class="prio-opt" onclick="event.stopPropagation();setBoxPriority('${bx.id}','p2')">P2</button><button class="prio-opt" onclick="event.stopPropagation();setBoxPriority('${bx.id}','p3')">P3</button><button class="prio-opt" onclick="event.stopPropagation();setBoxPriority('${bx.id}','p4')">P4</button><button class="prio-opt" onclick="event.stopPropagation();setBoxPriority('${bx.id}','failed')">FAIL</button></div></div></div>${hb}</div>${dh}${fr}${ss}`;
         boxesDiv.appendChild(boxDiv);
       });
       if(lv.boxes.length===0) boxesDiv.innerHTML='<div class="conn-message">Nessun modifica presente</div>';
