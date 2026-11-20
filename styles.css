@@ -1181,7 +1181,7 @@ select.input option { background: #0b1424; color: var(--ink); }
 .levels-container {
   display: flex;
   flex-direction: row;
-  gap: 2.25rem;
+  gap: 3.4rem;
   align-items: flex-start;
   min-width: max-content;
 }
@@ -1189,7 +1189,7 @@ select.input option { background: #0b1424; color: var(--ink); }
 /* ---------------------------------------------------------------- CONNESSIONI SVG */
 .connection-line {
   fill: none;
-  stroke-width: 2.5px;
+  stroke-width: 3px;
   stroke: #22c55e;
   opacity: .8;
   stroke-linecap: round;

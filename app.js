@@ -2668,7 +2668,7 @@ function drawSVGConnections(){
     const p=document.createElementNS('http://www.w3.org/2000/svg','path');
     p.setAttribute('d',`M ${Math.round(s.x1)} ${Math.round(s.y1)} C ${Math.round(s.x1+dx)} ${Math.round(s.y1)}, ${Math.round(s.x2-dx)} ${Math.round(s.y2)}, ${Math.round(s.x2)} ${Math.round(s.y2)}`);
     const pcolor=s.cp==='p2'?'#3b82f6':s.cp==='p3'?'#a855f7':s.cp==='p4'?'#eab308':'#22c55e';
-    const pwidth=s.cp==='p1'?4:s.cp==='p2'?3.2:s.cp==='p3'?2.5:s.cp==='p4'?2:2.5;
+    const pwidth=s.cp==='p1'?3:s.cp==='p2'?2:s.cp==='p3'?1:s.cp==='p4'?0.5:3;
     p.setAttribute('class','connection-line'+(activeSet?(activeSet.has(s.id)?' highlighted':' dimmed'):''));
     // Stile inline: il CSS .connection-line ha uno stroke di fallback che
     // altrimenti sovrascriverebbe l'attributo e renderebbe tutte le strade verdi.
