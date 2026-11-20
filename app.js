@@ -2621,12 +2621,13 @@ function drawSVGConnections(){
 
     const parts=partsByBox.get(cn.srcBoxId)||[];
     const outPart=parts.length ? parts[(cn.srcSpaceIndex||0)%parts.length] : null;
-    // Il colore segue la parte da cui parte la strada (a sinistra). Per una
-    // radice senza parte a monte vale la priorita della modifica stessa.
-    const cp = outPart
+    // La strada rappresenta la parte cn: il colore segue la priorita' della
+    // parte stessa. Le strade in uscita da una parte fallita restano nascoste.
+    const srcPrio = outPart
       ? (outPart.failed ? 'failed' : (outPart.priority||'p1'))
       : ((info.box && info.box.priority) || 'p1');
-    if(cp==='failed') return;
+    if(srcPrio==='failed') return;
+    const cp = cn.failed ? 'failed' : (cn.priority||'p1');
     const outRect=outPart ? rectOf('dot-out-'+outPart.id) : null;
     let x1,y1;
     if(outRect){
@@ -2658,13 +2659,14 @@ function drawSVGConnections(){
     const p=document.createElementNS('http://www.w3.org/2000/svg','path');
     p.setAttribute('d',`M ${Math.round(s.x1)} ${Math.round(s.y1)} C ${Math.round(s.x1+dx)} ${Math.round(s.y1)}, ${Math.round(s.x2-dx)} ${Math.round(s.y2)}, ${Math.round(s.x2)} ${Math.round(s.y2)}`);
     const pcolor=s.cp==='p2'?'#3b82f6':s.cp==='p3'?'#a855f7':s.cp==='p4'?'#eab308':s.cp==='failed'?'#ef4444':'#22c55e';
-    const popacity=s.cp==='p1'?1:s.cp==='p2'?0.8:s.cp==='p3'?0.6:s.cp==='p4'?0.4:s.cp==='failed'?0.5:1;
+    const popacity=s.cp==='p1'?1:s.cp==='p2'?0.9:s.cp==='p3'?0.8:s.cp==='p4'?0.7:s.cp==='failed'?0.6:1;
     p.setAttribute('class','connection-line'+(activeSet?(activeSet.has(s.id)?' highlighted':' dimmed'):''));
     // Stile inline: il CSS .connection-line ha uno stroke di fallback che
     // altrimenti sovrascriverebbe l'attributo e renderebbe tutte le strade verdi.
     p.style.stroke = pcolor;
     p.style.opacity = String(popacity);
     p.setAttribute('data-conn-id',s.id);
+    p.setAttribute('data-priority',s.cp);
     frag.appendChild(p);
   });
   svg.appendChild(frag);
